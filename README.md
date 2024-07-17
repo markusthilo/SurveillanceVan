@@ -1,3 +1,3 @@
 # SurveillanceVan
 
-Track copy processes.
+Check copy processes.
