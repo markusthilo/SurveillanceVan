@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 __author__ = 'Markus Thilo'
-__version__ = '0.1_2024-07-14'
+__version__ = '0.1_2024-07-18'
 __license__ = 'GPL-3'
 __email__ = 'markus.thilo@gmail.com'
 __status__ = 'Testing'
@@ -113,7 +113,7 @@ class Check:
 		else:
 			msg = f'{len(tc.missing)} missing path(s):'
 			for path, tp in tc.missing:
-				msg += f'\n\t{tp}: {path}'
+				msg += f'\n\t{tp}:\t{path}'
 			logging.info(msg)
 
 class MainLoop:
@@ -123,7 +123,7 @@ class MainLoop:
 		'Initiate main loop'
 		self.config = config
 		logging.info('Starting main loop')
-		while True:	# check if trigger file exists or time matches
+		while True:	# check if time matches
 			if datetime.now().strftime('%H:%M') in config.updates:
 				self.worker()
 				sleep(config.sleep)
