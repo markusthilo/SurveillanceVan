@@ -11,6 +11,8 @@ __description__ = 'Watch copy processes'
 import logging
 from pathlib import Path
 from filecmp import cmp as filecmp
+from socket import socket, gethostname, gethostbyname, AF_INET, SOCK_STREAM
+from threading import Thread
 from sys import exit as sysexit
 from time import sleep
 from datetime import datetime
@@ -80,10 +82,9 @@ class Config:
 		'Get configuration from file and initiate logging'
 		config = ConfigParser()
 		config.read(configfile)
-		self.root_paths = [ Path(path.strip()) for path in config['SOURCE']['paths'].split(',') ]
+		self.server_port = config['SERVER']['port']
 		self.work_path = Path(config['WORK']['path'])
 		self.backup_path = Path(config['BACKUP']['path'])
-		self.updates = [ t.strip(' ') for t in config['TRIGGER']['time'].split(',') ]
 
 class TreeCmp:
 	'''Compare recursivly and check what is in minor but missing in major'''
@@ -115,6 +116,31 @@ class Check:
 			for path, tp in tc.missing:
 				msg += f'\n\t{tp}:\t{path}'
 			logging.info(msg)
+
+class Server:
+	'''Socket TCP server'''
+
+	def __init__(self, port):
+		'''Build object for rhe server'''
+		self.hostname = gethostname()
+		self.host = gethostbyname(self.hostname)
+		self._server = socket(AF_INET, SOCK_STREAM)
+		self._server.bind((self.host, self.port))
+
+	def wait(self):
+		'''Wait for clients'''
+		self._server.listen()
+		self._connection, address = self._server.accept()
+		return address, self._connection.recv(4096)
+
+	def echo(self, msg):	
+		'''Send message to client'''
+		self._connection.sendall(msg.encode())
+
+	def close(self):
+		'''Terminate connection to client'''
+		self._connection.close()
+			
 
 class MainLoop:
 	'Main loop'
@@ -153,6 +179,15 @@ if __name__ == '__main__':	# start here if called as application
 	else:
 		loglevel = args.loglevel
 	log = Logger(args.logfile, loglevel)
+	
+	server = Server()
+	print(server.wait())
+	server.echo('TEST1')
+	server.echo('test2')
+	server.close()
+	
+	
+	'''
 	if loglevel == 'debug':
 		logging.debug('Starting check on debug level')
 		Check(config)
@@ -160,3 +195,4 @@ if __name__ == '__main__':	# start here if called as application
 		sysexit(0)
 	else:
 		MainLoop(config)
+	'''

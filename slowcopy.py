@@ -12,12 +12,14 @@ Copy directories and generate hashes
 '''
 
 from sys import executable as __executable__
+from sys import argv as sys_argv
+from sys import exit as sys_exit
 from pathlib import Path
 from socket import socket, AF_INET, SOCK_STREAM
 from time import sleep
 from tkinter import Tk, PhotoImage
 from tkinter.font import nametofont
-from tkinter.ttk import Frame, LabelFrame, Label, Button, Separator
+from tkinter.ttk import Frame, Label, Button
 from tkinter.scrolledtext import ScrolledText
 from tkinter.messagebox import askyesno, showerror
 from tkinter.filedialog import askdirectory
@@ -28,7 +30,7 @@ if Path(__executable__).stem == __app_name__.lower():
 else:
 	__parent_path__ = Path(__file__).parent
 
-class Van:
+class Client:
 	'''Simple communication to server using socket'''
 
 	HOST = '127.0.0.1'
@@ -47,11 +49,21 @@ class Van:
 	def listen(self):
 		'''Receive infos from server'''
 		while True:
-			sleep(self.sleep)
-			from_server = self._client(recv(4096))
-			if from_server == 0:
+			sleep(self.SLEEP)
+			from_server = self._client.recv(4096)
+			if from_server == b'':
+				self._client.close()
 				break
 			yield from_server.decode()
+
+class Copy:
+	'''Copy process'''
+
+	def __init__(self, root_dirs):
+		'''Generate object to copy'''
+		for root_dir in root_dirs:
+			print(root_dir)
+		
 
 class Gui(Tk):
 	'''GUI look and feel'''
@@ -89,7 +101,8 @@ class Gui(Tk):
 		self.source_text.grid(row=0, column=1, sticky='news',
 			ipadx=self.padding, ipady=self.padding, padx=self.padding, pady=self.padding)
 		frame = Frame(self)
-		frame.grid(row=1, column=0, columnspan=2, sticky='news', padx=self.padding, pady=self.padding)
+		frame.grid(row=1, column=1, sticky='news', padx=self.padding, pady=self.padding)
+		Label(frame, text='Copy to import directory').pack(padx=self.padding, pady=self.padding, side='left')
 		self.exec_button = Button(frame, text='Execute', command=self._execute)
 		self.exec_button.pack(padx=self.padding, pady=self.padding, side='right')
 		Hovertip(self.exec_button, 'Start copy process')
@@ -106,9 +119,7 @@ class Gui(Tk):
 			self.source_text.insert('end', f'{directory}\n')
 
 	def _execute(self):
-		source_paths = [ Path(line.strip())
-			for line in self.source_text.get('1.0', 'end').split('\n') if line.strip()
-		]
+		source_paths = self.source_text.get('1.0', 'end').strip()
 		if not source_paths:
 			return
 		self.busy = True
@@ -119,19 +130,19 @@ class Gui(Tk):
 		self.info_text.delete('1.0', 'end')
 		self.info_text.configure(state='disabled')
 		try:
-			connection = Van()
-			connection.init_copy(root_paths)
+			connection = Client()
+			connection.init_copy(source_paths)
 		except Exception as err:
 			showerror(title='Unable to connect to server', message=err)
 		else:
 			for msg in connection.listen():
 				self.info_text.configure(state='normal')
-				self.info_text.insert('end', '{msg}\n')
+				self.info_text.insert('end', f'{msg}\n')
 				self.info_text.configure(state='disabled')
 				self.info_text.yview('end')
+			self.source_text.configure(state='normal')
+			self.source_text.delete('1.0', 'end')
 		self.source_button.configure(state='normal')
-		self.source_text.configure(state='normal')
-		self.source_text.delete('1.0', 'end')
 		self.exec_button.configure(state='normal')
 		self.busy = False
 
@@ -144,7 +155,11 @@ class Gui(Tk):
 		self.destroy()
 
 if __name__ == '__main__':  # start here
-	Gui('''iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAMAAABg3Am1AAACEFBMVEUAAAH7AfwVFf8WFv4XF/0Y
+	if len(sys_argv) > 1:
+		cp = Copy(sys_argv[1:])
+		sys_exit(0)
+	else:
+		Gui('''iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAMAAABg3Am1AAACEFBMVEUAAAH7AfwVFf8WFv4XF/0Y
 GPwZGfwaGvsaGvwbG/scHPodHfkeHvkfH/kgIPggIPkhIfciIvYjI/UkJPUlJfQnJ/IoKPEpKfAq
 KvArK+4rK+8sLO4tLewtLe0uLusuLuwvL+swMOoxMegxMekyMuczM+UzM+Y0NOQ0NOU1NeM1NeQ1
 NeU2NuE2NuI2NuM3N+A3N+E4ON85Od45Od86Otw6Ot07O9o7O9s8PNk8PNs9Pdg9Pdk+PtY+Ptc/
