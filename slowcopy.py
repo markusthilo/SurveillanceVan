@@ -13,13 +13,14 @@ Copy directories and generate hashes
 
 from sys import executable as __executable__
 from pathlib import Path
-from functools import partial
+from socket import socket, AF_INET, SOCK_STREAM
+from time import sleep
 from tkinter import Tk, PhotoImage
 from tkinter.font import nametofont
 from tkinter.ttk import Frame, LabelFrame, Label, Button, Separator
 from tkinter.scrolledtext import ScrolledText
-from tkinter.messagebox import askyesno, showerror, showwarning
-from tkinter.filedialog import askdirectory, askopenfilename
+from tkinter.messagebox import askyesno, showerror
+from tkinter.filedialog import askdirectory
 from idlelib.tooltip import Hovertip
 
 if Path(__executable__).stem == __app_name__.lower():
@@ -30,9 +31,27 @@ else:
 class Van:
 	'''Simple communication to server using socket'''
 
+	HOST = '127.0.0.1'
+	PORT = 65500
+	SLEEP = 1
+
 	def __init__(self):
 		'''Establish connection'''
-		pass
+		self._client = socket(AF_INET, SOCK_STREAM)
+		self._client.connect((self.HOST, self.PORT))
+
+	def init_copy(self, directories):
+		'''Tell server the directories to copy'''
+		self._client.send((';'.join(directories)).encode())
+
+	def listen(self):
+		'''Receive infos from server'''
+		while True:
+			sleep(self.sleep)
+			from_server = self._client(recv(4096))
+			if from_server == 0:
+				break
+			yield from_server.decode()
 
 class Gui(Tk):
 	'''GUI look and feel'''
@@ -44,6 +63,7 @@ class Gui(Tk):
 	def __init__(self, icon_base64):
 		'Open application window'
 		super().__init__()
+		self.busy = False
 		self.title(f'{__app_name__} v{__version__}')
 		self.rowconfigure(0, weight=1)
 		self.columnconfigure(1, weight=1)
@@ -61,37 +81,23 @@ class Gui(Tk):
 		self.padding = int(self.font_size / self.PAD)
 		frame = Frame(self)
 		frame.grid(row=0, column=0,	sticky='n')
-		button = Button(frame, text='Source', command=self._add_dir)
-		button.pack(padx=self.padding, pady=self.padding, fill='x', expand=True)
-		Hovertip(button, 'Add directory you want to copy')
+		self.source_button = Button(frame, text='Source', command=self._add_dir)
+		self.source_button.pack(padx=self.padding, pady=self.padding, fill='x', expand=True)
+		Hovertip(self.source_button, 'Add directory you want to copy')
 		self.source_text = ScrolledText(self, font=(self.font_family, self.font_size),
 			padx = self.padding, pady = self.padding)
 		self.source_text.grid(row=0, column=1, sticky='news',
 			ipadx=self.padding, ipady=self.padding, padx=self.padding, pady=self.padding)
 		frame = Frame(self)
 		frame.grid(row=1, column=0, columnspan=2, sticky='news', padx=self.padding, pady=self.padding)
-		button = Button(frame, text='Execute', command=self._execute)
-		button.pack(padx=self.padding, pady=self.padding, side='right')
-		Hovertip(button, 'Start copy process')
+		self.exec_button = Button(frame, text='Execute', command=self._execute)
+		self.exec_button.pack(padx=self.padding, pady=self.padding, side='right')
+		Hovertip(self.exec_button, 'Start copy process')
 		self.info_text = ScrolledText(self, font=(self.font_family, self.font_size),
 			padx = self.padding, pady = self.padding)
 		self.info_text.grid(row=2, column=0, columnspan=2, sticky='news',
 			ipadx=self.padding, ipady=self.padding, padx=self.padding, pady=self.padding)
 		self.info_text.bind('<Key>', lambda dummy: 'break')
-		self.info_text.configure(state='disabled')
-
-	def ask_warning(self, msg):
-		return askyesno(f'{__app_name__}: Warning', msg, icon='warning')
-
-	def echo(self, msg):
-		self.info_text.configure(state='normal')
-		self.info_text.insert('end', '{msg}\n')
-		self.info_text.configure(state='disabled')
-		self.info_text.yview('end')
-
-	def clear(self, msg):
-		self.info_text.configure(state='normal')
-		self.info_text.delete('1.0', 'end')
 		self.info_text.configure(state='disabled')
 
 	def _add_dir(self):
@@ -100,15 +106,42 @@ class Gui(Tk):
 			self.source_text.insert('end', f'{directory}\n')
 
 	def _execute(self):
-		root_paths = [ Path(line.strip())
+		source_paths = [ Path(line.strip())
 			for line in self.source_text.get('1.0', 'end').split('\n') if line.strip()
 		]
+		if not source_paths:
+			return
+		self.busy = True
+		self.source_button.configure(state='disabled')
+		self.source_text.configure(state='disabled')
+		self.exec_button.configure(state='disabled')
+		self.info_text.configure(state='normal')
+		self.info_text.delete('1.0', 'end')
+		self.info_text.configure(state='disabled')
+		try:
+			connection = Van()
+			connection.init_copy(root_paths)
+		except Exception as err:
+			showerror(title='Unable to connect to server', message=err)
+		else:
+			for msg in connection.listen():
+				self.info_text.configure(state='normal')
+				self.info_text.insert('end', '{msg}\n')
+				self.info_text.configure(state='disabled')
+				self.info_text.yview('end')
+		self.source_button.configure(state='normal')
+		self.source_text.configure(state='normal')
 		self.source_text.delete('1.0', 'end')
-		print(root_paths)
+		self.exec_button.configure(state='normal')
+		self.busy = False
 
 	def _quit_app(self):
+		if self.busy and not askyesno(
+			title='Copy process is running!',
+			message='Are you sure to close client application?'
+		):
+			return
 		self.destroy()
-
 
 if __name__ == '__main__':  # start here
 	Gui('''iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAMAAABg3Am1AAACEFBMVEUAAAH7AfwVFf8WFv4XF/0Y
