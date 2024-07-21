@@ -29,7 +29,7 @@ class PathUtils:
 	@staticmethod
 	def tree(root):
 		'''Get size'''
-		dirs = dict()
+		dirs = {Path('.'): {'depth': 0, 'size': 0}}
 		files = dict()
 		for path in root.rglob('*'):
 			rel_path = path.relative_to(root)
@@ -39,8 +39,8 @@ class PathUtils:
 			elif path.is_file():
 				size = path.stat().st_size
 				files[rel_path] = {'depth': rel_depth, 'size': size}
-				if rel_depth > 1:
-					dirs[rel_path.parent]['size'] += size
+				for parent in rel_path.parents:
+					dirs[parent]['size'] += size
 		return dirs, files
 
 	@staticmethod
