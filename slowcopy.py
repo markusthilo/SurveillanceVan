@@ -24,6 +24,7 @@ from tkinter.scrolledtext import ScrolledText
 from tkinter.messagebox import askyesno, showerror
 from tkinter.filedialog import askdirectory
 from idlelib.tooltip import Hovertip
+from lib.pathutils import PathUtils
 
 if Path(__executable__).stem == __app_name__.lower():
 	__parent_path__ = Path(__executable__).parent
@@ -59,10 +60,25 @@ class Client:
 class Copy:
 	'''Copy process'''
 
-	def __init__(self, root_dirs):
+	ZIP_DEPTH = 2
+	ZIP_FILE_QUANTITY = 10
+
+	def __init__(self, root_dirs, echo=print):
 		'''Generate object to copy'''
 		for root_dir in root_dirs:
-			print(root_dir)
+			root_path = Path(root_dir)
+			dirs, files = PathUtils.tree(root_path)
+			to_zip = {
+				path for path, infos in dirs.items()
+				if infos['depth'] == self.ZIP_DEPTH and infos['files'] >= self.ZIP_FILE_QUANTITY
+			}
+			print(to_zip)
+			files_to_copy = {
+				path: infos for path, infos in files.items()
+				if len(set(path.parents)-to_zip) < len(path.parents)
+			}
+			print(files_to_copy)
+			
 		
 
 class Gui(Tk):
@@ -73,7 +89,7 @@ class Gui(Tk):
 	Y_FACTOR = 30
 
 	def __init__(self, icon_base64):
-		'Open application window'
+		'''Open application window'''
 		super().__init__()
 		self.busy = False
 		self.title(f'{__app_name__} v{__version__}')
@@ -118,6 +134,13 @@ class Gui(Tk):
 		if directory:
 			self.source_text.insert('end', f'{directory}\n')
 
+	def echo(self, msg):
+		'''Write message to info field (ScrolledText)'''
+		self.info_text.configure(state='normal')
+		self.info_text.insert('end', f'{msg}\n')
+		self.info_text.configure(state='disabled')
+		self.info_text.yview('end')
+
 	def _execute(self):
 		source_paths = self.source_text.get('1.0', 'end').strip()
 		if not source_paths:
@@ -129,19 +152,9 @@ class Gui(Tk):
 		self.info_text.configure(state='normal')
 		self.info_text.delete('1.0', 'end')
 		self.info_text.configure(state='disabled')
-		try:
-			connection = Client()
-			connection.init_copy(source_paths)
-		except Exception as err:
-			showerror(title='Unable to connect to server', message=err)
-		else:
-			for msg in connection.listen():
-				self.info_text.configure(state='normal')
-				self.info_text.insert('end', f'{msg}\n')
-				self.info_text.configure(state='disabled')
-				self.info_text.yview('end')
-			self.source_text.configure(state='normal')
-			self.source_text.delete('1.0', 'end')
+		cp = Copy(source_paths, echo=self.echo)
+		self.source_text.configure(state='normal')
+		self.source_text.delete('1.0', 'end')
 		self.source_button.configure(state='normal')
 		self.exec_button.configure(state='normal')
 		self.busy = False

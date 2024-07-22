@@ -4,10 +4,6 @@
 from pathlib import Path
 from hashlib import sha256
 from zipfile import ZipFile, ZIP_DEFLATED
-from filecmp import cmp as filecmp
-from socket import socket, gethostname, gethostbyname, AF_INET, SOCK_STREAM
-from threading import Thread
-from datetime import datetime
 
 class PathUtils:
 	'''Some functions for pathlib's Path class'''
@@ -29,18 +25,19 @@ class PathUtils:
 	@staticmethod
 	def tree(root):
 		'''Get size'''
-		dirs = {Path('.'): {'depth': 0, 'size': 0}}
+		dirs = {Path('.'): {'depth': 0, 'size': 0, 'files': 0}}
 		files = dict()
 		for path in root.rglob('*'):
 			rel_path = path.relative_to(root)
 			rel_depth = len(list(rel_path.parents))
 			if path.is_dir():
-				dirs[rel_path] = {'depth': rel_depth, 'size': 0}
+				dirs[rel_path] = {'depth': rel_depth, 'size': 0, 'files': 0}
 			elif path.is_file():
 				size = path.stat().st_size
 				files[rel_path] = {'depth': rel_depth, 'size': size}
 				for parent in rel_path.parents:
 					dirs[parent]['size'] += size
+					dirs[parent]['files'] += 1
 		return dirs, files
 
 	@staticmethod
@@ -69,9 +66,9 @@ class PathUtils:
 		return hash.hexdigest()
 
 	@staticmethod
-	def zip_dir(self, root):
+	def zip_dir(self, root, zip_path):
 		'''Build zip file'''
-		zip_path = root.with_suffix('.zip')
+		zip_path = zip_path.with_suffix('.zip')
 		file_error_cnt = 0
 		dir_error_cnt = 0
 		with ZipFile(zip_path, 'w', ZIP_DEFLATED) as zf:
@@ -88,17 +85,4 @@ class PathUtils:
 						dir_error_cnt += 1
 		return zip_path, file_error_cnt, dir_error_cnt
 
-	@staticmethod
-	def __init__(major_root, minor_root):
-		'''Compare recursivly and check what is in minor but missing in major'''
-		missing = list()
-		for minor_path, rel_path, tp in PathUtils.walk(minor_root):
-			major_path = major_root / rel_path
-			if tp == 'file':
-				if not major_path.is_file():
-					missing.append((rel_path, 'missing file'))
-				elif not filecmp(major_path, minor_path):
-					missing.append((rel_path, 'divergent file'))
-			elif tp == 'dir' and not major_path.is_dir():
-				missing.append((rel_path, 'missing dir'))
-		return missing
+
