@@ -3,7 +3,7 @@
 
 __app_name__ = 'SlowCopy'
 __author__ = 'Markus Thilo'
-__version__ = '0.0.1_2024-07-18'
+__version__ = '0.0.1_2024-07-26'
 __license__ = 'GPL-3'
 __email__ = 'markus.thilo@gmail.com'
 __status__ = 'Testing'
@@ -63,22 +63,29 @@ class Copy:
 	ZIP_DEPTH = 2
 	ZIP_FILE_QUANTITY = 10
 
-	def __init__(self, root_dirs, echo=print):
-		'''Generate object to copy'''
+	def __init__(self, root_dirs):
+		'''Generate object to copy and to zip'''
 		for root_dir in root_dirs:
 			root_path = Path(root_dir)
 			dirs, files = PathUtils.tree(root_path)
-			to_zip = {
-				path for path, infos in dirs.items()
+			self.dirs2zip = {	# look for dirs with to much files for normal copy
+				path: infos for path, infos in dirs.items()
 				if infos['depth'] == self.ZIP_DEPTH and infos['files'] >= self.ZIP_FILE_QUANTITY
 			}
-			print(to_zip)
-			files_to_copy = {
-				path: infos for path, infos in files.items()
-				if len(set(path.parents)-to_zip) < len(path.parents)
+			paths_to_zip = set(self.dirs2zip)
+			self.dirs2copy = {	# dirs that will not be zipped
+				path: infos for path, infos in dirs.items()
+				if paths_to_zip - set(path.parents) == paths_to_zip
 			}
-			print(files_to_copy)
-			
+			self.files2copy = {	# files that will not be zipped
+				path: infos for path, infos in files.items()
+				if paths_to_zip - set(path.parents) == paths_to_zip
+			}
+
+	def primary(self, destination_root, echo=print):
+		'''Copy and zip to primary destination'''
+		for src_dir, infos in self.dirs2copy.items():
+			print('DEBUG', src_dir, infos)
 		
 
 class Gui(Tk):
