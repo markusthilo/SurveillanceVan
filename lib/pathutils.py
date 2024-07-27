@@ -42,47 +42,46 @@ class PathUtils:
 
 	@staticmethod
 	def hash_file(path):
-		'''Calculate SHA256 from file (pathlib.Path)'''
+		'''Calculate SHA256 from file'''
 		hash = sha256()
 		with path.open('rb') as fh:
 			while True:
-				block = fh.read(self.BLOCK_SIZE)
+				block = fh.read(PathUtils.BLOCK_SIZE)
 				if not block:
 					break
 				hash.update(block)
 		return hash.hexdigest()
 
 	@staticmethod
-	def copy_file(self, src, dst):
-		'''Copy one file and calculate hashes (src + dst have to be pathlib.Path of file)'''
+	def copy_file(src, dst):
+		'''Copy one file and calculate hashes, return hash on success'''
 		hash = sha256()
 		with src.open('rb') as sfh, dst.open('wb') as dfh:
 			while True:
-				block = sfh.read(self.BLOCK_SIZE)
+				block = sfh.read(PathUtils.BLOCK_SIZE)
 				if not block:
 					break
 				dfh.write(block)
 				hash.update(block)
-		return hash.hexdigest()
+		src_hash = hash.hexdigest()
+		if PathUtils.hash_file(dst) == src_hash:
+			return src_hash
 
 	@staticmethod
-	def zip_dir(self, root, zip_path):
+	def zip_dir(root, zip):
 		'''Build zip file'''
-		zip_path = zip_path.with_suffix('.zip')
-		file_error_cnt = 0
-		dir_error_cnt = 0
-		with ZipFile(zip_path, 'w', ZIP_DEFLATED) as zf:
-			for path, relative, tp in PathUtils.walk(self.root_path):
-				if tp == 'File':
+		file_errors = list()
+		dir_errors = list()
+		with ZipFile(zip, 'w', ZIP_DEFLATED) as zf:
+			for path, relative, tp in PathUtils.walk(root):
+				if tp == 'file':
 					try:
 						zf.write(path, relative)
 					except:
-						file_error_cnt += 1
-				elif tp == 'Dir':
+						file_errors.append(relative)
+				elif tp == 'dir':
 					try:
 						zf.mkdir(f'{relative}')
 					except:
-						dir_error_cnt += 1
-		return zip_path, file_error_cnt, dir_error_cnt
-
-
+						dir_errors.append(relative)
+		return PathUtils.hash_file(zip), file_errors, dir_errors

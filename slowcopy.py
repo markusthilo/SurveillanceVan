@@ -3,20 +3,20 @@
 
 __app_name__ = 'SlowCopy'
 __author__ = 'Markus Thilo'
-__version__ = '0.0.1_2024-07-26'
+__version__ = '0.0.1_2024-07-27'
 __license__ = 'GPL-3'
 __email__ = 'markus.thilo@gmail.com'
 __status__ = 'Testing'
 __description__ = '''
-Copy directories and generate hashes
+Copy directories to a fixed destination and write logs
 '''
 
+### standard libs ###
 from sys import executable as __executable__
 from sys import argv as sys_argv
 from sys import exit as sys_exit
 from pathlib import Path
-from socket import socket, AF_INET, SOCK_STREAM
-from time import sleep
+### tk libs ###
 from tkinter import Tk, PhotoImage
 from tkinter.font import nametofont
 from tkinter.ttk import Frame, Label, Button
@@ -24,69 +24,86 @@ from tkinter.scrolledtext import ScrolledText
 from tkinter.messagebox import askyesno, showerror
 from tkinter.filedialog import askdirectory
 from idlelib.tooltip import Hovertip
+### custom libs ###
 from lib.pathutils import PathUtils
+from lib.logger import Logger
+from lib.stringutils import StringUtils
 
 if Path(__executable__).stem == __app_name__.lower():
 	__parent_path__ = Path(__executable__).parent
 else:
 	__parent_path__ = Path(__file__).parent
 
-class Client:
-	'''Simple communication to server using socket'''
-
-	HOST = '127.0.0.1'
-	PORT = 65500
-	SLEEP = 1
-
-	def __init__(self):
-		'''Establish connection'''
-		self._client = socket(AF_INET, SOCK_STREAM)
-		self._client.connect((self.HOST, self.PORT))
-
-	def init_copy(self, directories):
-		'''Tell server the directories to copy'''
-		self._client.send((';'.join(directories)).encode())
-
-	def listen(self):
-		'''Receive infos from server'''
-		while True:
-			sleep(self.SLEEP)
-			from_server = self._client.recv(4096)
-			if from_server == b'':
-				self._client.close()
-				break
-			yield from_server.decode()
-
 class Copy:
-	'''Copy process'''
+	'''Copy functionality'''
 
-	ZIP_DEPTH = 2
-	ZIP_FILE_QUANTITY = 10
+	DST_PATH = Path('test_dst')	# root directory to copy
+	LOG_PATH = Path('test_log')	# directory to write logs that trigger surveillance
+	LOG_NAME = 'log.txt' # Log file name
+	ZIP_DEPTH = 2	# path depth where subdirs will be zipped
+	ZIP_FILE_QUANTITY = 10	# minamal quantity of files in subdir to zip
 
-	def __init__(self, root_dirs):
+	def __init__(self, root_dirs, echo=print):
 		'''Generate object to copy and to zip'''
 		for root_dir in root_dirs:
 			root_path = Path(root_dir)
-			dirs, files = PathUtils.tree(root_path)
-			self.dirs2zip = {	# look for dirs with to much files for normal copy
+			if not root_path.is_dir():
+				echo(f'Skipping {root_path}, it is not a directory')
+				continue
+			dirs, files = PathUtils.tree(root_path)	# get source file/dir structure
+			dirs2zip = {	# look for dirs with to much files for normal copy
 				path: infos for path, infos in dirs.items()
 				if infos['depth'] == self.ZIP_DEPTH and infos['files'] >= self.ZIP_FILE_QUANTITY
 			}
-			paths_to_zip = set(self.dirs2zip)
-			self.dirs2copy = {	# dirs that will not be zipped
+			paths_to_zip = set(dirs2zip)
+			dirs2copy = {	# dirs that will not be zipped
 				path: infos for path, infos in dirs.items()
 				if paths_to_zip - set(path.parents) == paths_to_zip
 			}
-			self.files2copy = {	# files that will not be zipped
+			files2copy = {	# files that will not be zipped
 				path: infos for path, infos in files.items()
 				if paths_to_zip - set(path.parents) == paths_to_zip
 			}
-
-	def primary(self, destination_root, echo=print):
-		'''Copy and zip to primary destination'''
-		for src_dir, infos in self.dirs2copy.items():
-			print('DEBUG', src_dir, infos)
-		
+			dst_path = self.DST_PATH / root_path.name	# generete destination directories
+			dst_path.mkdir(parents=True, exist_ok=True)	# if necessary
+			log_path = self.LOG_PATH / root_path.name
+			log_path.mkdir(parents=True, exist_ok=True)
+			log_file_path = log_path / self.LOG_NAME
+			log = Logger(log_file_path, info=f'Copying {root_path} to {dst_path}', echo=echo)
+			echo(f'Generating {len(dirs2copy)} directories')
+			for src_dir, infos in dirs2copy.items():
+				path = dst_path / src_dir
+				try:
+					path.mkdir(parents=True, exist_ok=True)
+				except Exception as ex:
+					log.warning(f'Unable to generate directory {path}:\n{ex}')
+			for src_file, infos in files2copy.items():
+				echo(f'Copying {src_file}) {StringUtils.bytes(infos['size'])}')
+				path = dst_path / src_file
+				try:
+					hash = PathUtils.copy_file(root_path  / src_file, path)
+				except Exception as ex:
+					log.error(f'Unable to copy source file to {path}:\n{ex}')
+				else:
+					if hash:
+						files2copy[src_file]['hash'] = hash
+					else:
+						log.error(f'Source file and {path} are not identical')
+			for src_dir, infos in dirs2zip.items():
+				echo(f'Zipping {src_dir}) {StringUtils.bytes(infos['size'])}')
+				path = dst_path / src_dir.with_suffix('.zip')
+				try:
+					hash, file_errors, dir_errors = PathUtils.zip_dir(root_path  / src_dir, path)
+				except Exception as ex:
+					log.error(f'Unable build archive {path}:\n{ex}')
+				else:
+					dirs2zip[src_dir]['hash'] = hash
+					if file_errors:
+						log.warning(f'The following file(s) could not be zipped:\n{"\n".join(file_errors)}')
+					if dir_errors:
+						log.warning(f'The following dir(s) could not be build in zip:\n{"\n".join(dir_errors)}')
+			if log.close():
+				echo(f'{log.errors} error(s) and {log.warnings} occured while processing {root_path}')
 
 class Gui(Tk):
 	'''GUI look and feel'''
