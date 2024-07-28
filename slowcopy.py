@@ -70,6 +70,7 @@ class Copy:
 			log_path.mkdir(parents=True, exist_ok=True)
 			log_file_path = log_path / self.LOG_NAME
 			log = Logger(log_file_path, info=f'Copying {root_path} to {dst_path}', echo=echo)
+			new_files = dict()
 			echo(f'Generating {len(dirs2copy)} directories')
 			for src_dir, infos in dirs2copy.items():
 				path = dst_path / src_dir
@@ -86,7 +87,7 @@ class Copy:
 					log.error(f'Unable to copy source file to {path}:\n{ex}')
 				else:
 					if hash:
-						files2copy[src_file]['hash'] = hash
+						new_files[src_file] = {'size': infos['size'], 'hash': hash}
 					else:
 						log.error(f'Source file and {path} are not identical')
 			for src_dir, infos in dirs2zip.items():
@@ -97,13 +98,14 @@ class Copy:
 				except Exception as ex:
 					log.error(f'Unable build archive {path}:\n{ex}')
 				else:
-					dirs2zip[src_dir]['hash'] = hash
+					new_files[src_dir.with_suffix('.zip')] = {'size': path.stat().st_size, 'hash': hash}
 					if file_errors:
 						log.warning(f'The following file(s) could not be zipped:\n{"\n".join(file_errors)}')
 					if dir_errors:
 						log.warning(f'The following dir(s) could not be build in zip:\n{"\n".join(dir_errors)}')
 			if log.close():
 				echo(f'{log.errors} error(s) and {log.warnings} occured while processing {root_path}')
+			print(new_files)
 
 class Gui(Tk):
 	'''GUI look and feel'''
@@ -158,8 +160,9 @@ class Gui(Tk):
 		if directory:
 			self.source_text.insert('end', f'{directory}\n')
 
-	def echo(self, msg):
+	def echo(self, *arg):
 		'''Write message to info field (ScrolledText)'''
+		msg = ' '.join(arg)
 		self.info_text.configure(state='normal')
 		self.info_text.insert('end', f'{msg}\n')
 		self.info_text.configure(state='disabled')
