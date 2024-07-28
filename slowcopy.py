@@ -37,9 +37,10 @@ else:
 class Copy:
 	'''Copy functionality'''
 
-	DST_PATH = Path('test_dst')	# root directory to copy
-	LOG_PATH = Path('test_log')	# directory to write logs that trigger surveillance
-	LOG_NAME = 'log.txt' # Log file name
+	DST_PATH = Path('/home/neo/test/test_dst')	# root directory to copy
+	LOG_PATH = Path('/home/neo/test/test_log')	# directory to write logs that trigger surveillance
+	LOG_NAME = 'log.txt' # log file name
+	TSV_NAME = 'done.txt'	# csv file name - file is generaten when all is done
 	ZIP_DEPTH = 2	# path depth where subdirs will be zipped
 	ZIP_FILE_QUANTITY = 10	# minamal quantity of files in subdir to zip
 
@@ -70,7 +71,7 @@ class Copy:
 			log_path.mkdir(parents=True, exist_ok=True)
 			log_file_path = log_path / self.LOG_NAME
 			log = Logger(log_file_path, info=f'Copying {root_path} to {dst_path}', echo=echo)
-			new_files = dict()
+			tsv = 'Path\tSize\tHash'
 			echo(f'Generating {len(dirs2copy)} directories')
 			for src_dir, infos in dirs2copy.items():
 				path = dst_path / src_dir
@@ -87,7 +88,7 @@ class Copy:
 					log.error(f'Unable to copy source file to {path}:\n{ex}')
 				else:
 					if hash:
-						new_files[src_file] = {'size': infos['size'], 'hash': hash}
+						tsv += f'\n{src_file}\t{infos["size"]}\t{hash}'
 					else:
 						log.error(f'Source file and {path} are not identical')
 			for src_dir, infos in dirs2zip.items():
@@ -98,14 +99,23 @@ class Copy:
 				except Exception as ex:
 					log.error(f'Unable build archive {path}:\n{ex}')
 				else:
-					new_files[src_dir.with_suffix('.zip')] = {'size': path.stat().st_size, 'hash': hash}
+					tsv += f'\n{src_dir.with_suffix(".zip")}\t{path.stat().st_size}\t{hash}'
 					if file_errors:
 						log.warning(f'The following file(s) could not be zipped:\n{"\n".join(file_errors)}')
 					if dir_errors:
 						log.warning(f'The following dir(s) could not be build in zip:\n{"\n".join(dir_errors)}')
+			dst_tsv = dst_path / self.TSV_NAME
+			try:
+				dst_tsv.write_text(tsv, encoding='utf-8')
+			except Exception as ex:
+				log.error(f'Unable to write {dst_tsv}:\n{ex}')
+			log_tsv = log_path / self.TSV_NAME
+			try:
+				log_tsv.write_text(tsv, encoding='utf-8')
+			except Exception as ex:
+				log.error(f'Unable to write {log_tsv}:\n{ex}')
 			if log.close():
 				echo(f'{log.errors} error(s) and {log.warnings} occured while processing {root_path}')
-			print(new_files)
 
 class Gui(Tk):
 	'''GUI look and feel'''
@@ -179,7 +189,7 @@ class Gui(Tk):
 		self.info_text.configure(state='normal')
 		self.info_text.delete('1.0', 'end')
 		self.info_text.configure(state='disabled')
-		cp = Copy(source_paths, echo=self.echo)
+		Copy(source_paths.split('\n'), echo=self.echo)
 		self.source_text.configure(state='normal')
 		self.source_text.delete('1.0', 'end')
 		self.source_button.configure(state='normal')
@@ -196,7 +206,7 @@ class Gui(Tk):
 
 if __name__ == '__main__':  # start here
 	if len(sys_argv) > 1:
-		cp = Copy(sys_argv[1:])
+		Copy(sys_argv[1:])
 		sys_exit(0)
 	else:
 		Gui('''iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAMAAABg3Am1AAACEFBMVEUAAAH7AfwVFf8WFv4XF/0Y

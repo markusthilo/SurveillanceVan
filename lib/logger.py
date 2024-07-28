@@ -38,5 +38,6 @@ class Logger:
 
 	def close(self):
 		'''Close logfile'''
+		self.info('Done, closing log file')
 		self._fh.close()
 		return self.warnings + self.warnings > 0
