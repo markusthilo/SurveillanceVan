@@ -3,13 +3,11 @@
 
 __app_name__ = 'SlowCopy'
 __author__ = 'Markus Thilo'
-__version__ = '0.0.1_2024-07-27'
+__version__ = '0.0.1_2024-07-29'
 __license__ = 'GPL-3'
 __email__ = 'markus.thilo@gmail.com'
 __status__ = 'Testing'
-__description__ = '''
-Copy directories to a fixed destination and write logs
-'''
+__description__ = 'Version LKA 71 - Test'
 
 ### standard libs ###
 from sys import executable as __executable__
@@ -29,11 +27,6 @@ from lib.pathutils import PathUtils
 from lib.logger import Logger
 from lib.stringutils import StringUtils
 
-if Path(__executable__).stem == __app_name__.lower():
-	__parent_path__ = Path(__executable__).parent
-else:
-	__parent_path__ = Path(__file__).parent
-
 class Copy:
 	'''Copy functionality'''
 
@@ -41,6 +34,7 @@ class Copy:
 	LOG_PATH = Path('/home/neo/test/test_log')	# directory to write logs that trigger surveillance
 	LOG_NAME = 'log.txt' # log file name
 	TSV_NAME = 'done.txt'	# csv file name - file is generaten when all is done
+	MAX_PATH_LEN = 230	# throw error when paths have more chars
 	ZIP_DEPTH = 2	# path depth where subdirs will be zipped
 	ZIP_FILE_QUANTITY = 10	# minamal quantity of files in subdir to zip
 
@@ -52,6 +46,10 @@ class Copy:
 				echo(f'Skipping {root_path}, it is not a directory')
 				continue
 			dirs, files = PathUtils.tree(root_path)	# get source file/dir structure
+			for path in dirs | files:
+				if len(f'{path.absolute()}') > self.MAX_PATH_LEN:
+					echo(f'ERROR: path {path.absolute()} has more than {self.MAX_PATH_LEN} characters')
+					return
 			dirs2zip = {	# look for dirs with to much files for normal copy
 				path: infos for path, infos in dirs.items()
 				if infos['depth'] == self.ZIP_DEPTH and infos['files'] >= self.ZIP_FILE_QUANTITY
@@ -123,15 +121,16 @@ class Gui(Tk):
 	PAD = 4
 	X_FACTOR = 40
 	Y_FACTOR = 30
+	LABEL = __description__
 
 	def __init__(self, icon_base64):
 		'''Open application window'''
 		super().__init__()
 		self.busy = False
 		self.title(f'{__app_name__} v{__version__}')
-		self.rowconfigure(0, weight=1)
+		self.rowconfigure(1, weight=1)
 		self.columnconfigure(1, weight=1)
-		self.rowconfigure(2, weight=1)
+		self.rowconfigure(3, weight=1)
 		self.wm_iconphoto(True, PhotoImage(data=icon_base64))
 		self.protocol('WM_DELETE_WINDOW', self._quit_app)
 		font = nametofont('TkTextFont').actual()
@@ -144,23 +143,27 @@ class Gui(Tk):
 		self.resizable(True, True)
 		self.padding = int(self.font_size / self.PAD)
 		frame = Frame(self)
-		frame.grid(row=0, column=0,	sticky='n')
+		frame.grid(row=0, column=0, columnspan=2, sticky='news',
+			ipadx=self.padding, ipady=self.padding, padx=self.padding, pady=self.padding)
+		Label(frame, text=self.LABEL).pack(padx=self.padding, pady=self.padding)
+		frame = Frame(self)
+		frame.grid(row=1, column=0,	sticky='n')
 		self.source_button = Button(frame, text='Source', command=self._add_dir)
 		self.source_button.pack(padx=self.padding, pady=self.padding, fill='x', expand=True)
 		Hovertip(self.source_button, 'Add directory you want to copy')
 		self.source_text = ScrolledText(self, font=(self.font_family, self.font_size),
 			padx = self.padding, pady = self.padding)
-		self.source_text.grid(row=0, column=1, sticky='news',
+		self.source_text.grid(row=1, column=1, sticky='news',
 			ipadx=self.padding, ipady=self.padding, padx=self.padding, pady=self.padding)
 		frame = Frame(self)
-		frame.grid(row=1, column=1, sticky='news', padx=self.padding, pady=self.padding)
+		frame.grid(row=2, column=1, sticky='news', padx=self.padding, pady=self.padding)
 		Label(frame, text='Copy to import directory').pack(padx=self.padding, pady=self.padding, side='left')
 		self.exec_button = Button(frame, text='Execute', command=self._execute)
 		self.exec_button.pack(padx=self.padding, pady=self.padding, side='right')
 		Hovertip(self.exec_button, 'Start copy process')
 		self.info_text = ScrolledText(self, font=(self.font_family, self.font_size),
 			padx = self.padding, pady = self.padding)
-		self.info_text.grid(row=2, column=0, columnspan=2, sticky='news',
+		self.info_text.grid(row=3, column=0, columnspan=2, sticky='news',
 			ipadx=self.padding, ipady=self.padding, padx=self.padding, pady=self.padding)
 		self.info_text.bind('<Key>', lambda dummy: 'break')
 		self.info_text.configure(state='disabled')
