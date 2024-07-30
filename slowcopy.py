@@ -1,19 +1,23 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-__app_name__ = 'SlowCopy'
 __author__ = 'Markus Thilo'
-__version__ = '0.0.1_2024-07-29'
+__version__ = '0.0.1_2024-07-30'
 __license__ = 'GPL-3'
 __email__ = 'markus.thilo@gmail.com'
 __status__ = 'Testing'
 __description__ = 'Version LKA 71 - Test'
+__destination__ = 'C:\\Users\\THI\\Documents\\test_dst'
+#__destination__ = '/home/neo/test/test_dst'
+__logging__ = 'C:\\Users\\THI\\Documents\\test_log'
+#__logging__ = '/home/neo/test/test_log'
 
 ### standard libs ###
 from sys import executable as __executable__
 from sys import argv as sys_argv
 from sys import exit as sys_exit
 from pathlib import Path
+from threading import Thread
 ### tk libs ###
 from tkinter import Tk, PhotoImage
 from tkinter.font import nametofont
@@ -30,8 +34,9 @@ from lib.stringutils import StringUtils
 class Copy:
 	'''Copy functionality'''
 
-	DST_PATH = Path('/home/neo/test/test_dst')	# root directory to copy
-	LOG_PATH = Path('/home/neo/test/test_log')	# directory to write logs that trigger surveillance
+	### hard coded configuration ###
+	DST_PATH = Path(__destination__)	# root directory to copy
+	LOG_PATH = Path(__logging__)	# directory to write logs that trigger surveillance
 	LOG_NAME = 'log.txt' # log file name
 	TSV_NAME = 'done.txt'	# csv file name - file is generaten when all is done
 	MAX_PATH_LEN = 230	# throw error when paths have more chars
@@ -40,6 +45,7 @@ class Copy:
 
 	def __init__(self, root_dirs, echo=print):
 		'''Generate object to copy and to zip'''
+		self.exceptions = True
 		for root_dir in root_dirs:
 			root_path = Path(root_dir)
 			if not root_path.is_dir():
@@ -63,13 +69,21 @@ class Copy:
 				path: infos for path, infos in files.items()
 				if paths_to_zip - set(path.parents) == paths_to_zip
 			}
-			dst_path = self.DST_PATH / root_path.name	# generete destination directories
-			dst_path.mkdir(parents=True, exist_ok=True)	# if necessary
+			dst_path = self.DST_PATH / root_path.name
+			try:
+				dst_path.mkdir(exist_ok=True)
+			except Exception as ex:
+				echo(f'Unable to generate directory {path}:\n{ex}')
+				return
 			log_path = self.LOG_PATH / root_path.name
-			log_path.mkdir(parents=True, exist_ok=True)
+			try:
+				log_path.mkdir(exist_ok=True)
+			except Exception as ex:
+				echo(f'Unable to generate directory {path}:\n{ex}')
+				return
 			log_file_path = log_path / self.LOG_NAME
 			log = Logger(log_file_path, info=f'Copying {root_path} to {dst_path}', echo=echo)
-			tsv = 'Path\tSize\tHash'
+			tsv = 'Path\tSize\tHash'	# will later be written as tsv files
 			echo(f'Generating {len(dirs2copy)} directories')
 			for src_dir, infos in dirs2copy.items():
 				path = dst_path / src_dir
@@ -114,6 +128,23 @@ class Copy:
 				log.error(f'Unable to write {log_tsv}:\n{ex}')
 			if log.close():
 				echo(f'{log.errors} error(s) and {log.warnings} occured while processing {root_path}')
+			else:
+				self.exceptions = False
+
+class Worker(Thread):
+	'''Thread that does the work while Tk is running the GUI'''
+
+	def __init__(self, gui):
+		'''Get all attributes from GUI and run Copy'''
+		super().__init__()
+		self.gui = gui
+
+	def run(self):
+		'''Run thread'''
+		copy = Copy(self.gui.source_paths, echo=self.gui.echo)
+		if copy.exceptions:
+			showerror(title='Warning', message='Problems occured!')
+		self.gui.finished()
 
 class Gui(Tk):
 	'''GUI look and feel'''
@@ -126,8 +157,8 @@ class Gui(Tk):
 	def __init__(self, icon_base64):
 		'''Open application window'''
 		super().__init__()
-		self.busy = False
-		self.title(f'{__app_name__} v{__version__}')
+		self.worker = None
+		self.title(f'SlowCopy v{__version__}')
 		self.rowconfigure(1, weight=1)
 		self.columnconfigure(1, weight=1)
 		self.rowconfigure(3, weight=1)
@@ -185,31 +216,37 @@ class Gui(Tk):
 		source_paths = self.source_text.get('1.0', 'end').strip()
 		if not source_paths:
 			return
-		self.busy = True
 		self.source_button.configure(state='disabled')
 		self.source_text.configure(state='disabled')
 		self.exec_button.configure(state='disabled')
 		self.info_text.configure(state='normal')
 		self.info_text.delete('1.0', 'end')
 		self.info_text.configure(state='disabled')
-		Copy(source_paths.split('\n'), echo=self.echo)
+		self.source_paths = source_paths.split('\n')
+		self.worker = Worker(self)
+		self.worker.start()
+
+	def finished(self):
+		'''Run this when Worker has finished'''
 		self.source_text.configure(state='normal')
 		self.source_text.delete('1.0', 'end')
 		self.source_button.configure(state='normal')
 		self.exec_button.configure(state='normal')
-		self.busy = False
+		self.worker = None
 
 	def _quit_app(self):
-		if self.busy and not askyesno(
+		if self.worker and not askyesno(
 			title='Copy process is running!',
-			message='Are you sure to close client application?'
+			message='Are you sure to kill copy process / application?'
 		):
 			return
 		self.destroy()
 
 if __name__ == '__main__':  # start here
 	if len(sys_argv) > 1:
-		Copy(sys_argv[1:])
+		copy = Copy(sys_argv[1:])
+		if copy.exceptions:		
+			sys_exit(1)
 		sys_exit(0)
 	else:
 		Gui('''iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAMAAABg3Am1AAACEFBMVEUAAAH7AfwVFf8WFv4XF/0Y
