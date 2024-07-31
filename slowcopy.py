@@ -46,14 +46,14 @@ class Copy:
 	def __init__(self, root_dirs, echo=print):
 		'''Generate object to copy and to zip'''
 		self.exceptions = True
-		for root_dir in root_dirs:
+		for root_dir in root_dirs:	# loop through all given root dirs
 			root_path = Path(root_dir.strip('"').strip("'").strip())	# make sure f**king win gets pure path
 			echo(f'Preparing to copy {root_path}')
 			if not root_path.is_dir():
-				echo(f'Skipping {root_path}, it is not a directory')
-				continue
+				echo(f'ERROR: {root_path} it is not a directory')
+				return
 			dirs, files = PathUtils.tree(root_path)	# get source file/dir structure
-			for path in dirs | files:
+			for path in dirs | files:	# check length of all paths
 				if len(f'{path.absolute()}') > self.MAX_PATH_LEN:
 					echo(f'ERROR: path {path.absolute()} has more than {self.MAX_PATH_LEN} characters')
 					return
@@ -92,10 +92,9 @@ class Copy:
 					path.mkdir(parents=True, exist_ok=True)
 				except Exception as ex:
 					log.warning(f'Unable to generate directory {path}:\n{ex}')
-
-			all_files = len(files2copy) + len(dirs2zip)
+			all_files = len(files2copy) + len(dirs2zip)	# how much files to copy?
 			counter = 1
-			for src_file, infos in files2copy.items():
+			for src_file, infos in files2copy.items():	# loop to copy files
 				echo(f'Copying {src_file}) ({counter} of {all_files}, {StringUtils.bytes(infos['size'])})')
 				path = dst_path / src_file
 				try:
@@ -108,7 +107,7 @@ class Copy:
 						tsv += f'\n{src_file}\t{infos["size"]}\t{hash}'
 					else:
 						log.error(f'Source file and {path} are not identical')
-			for src_dir, infos in dirs2zip.items():
+			for src_dir, infos in dirs2zip.items():	# loop to zip files
 				echo(f'Zipping {src_dir} ({counter} of {all_files}, {StringUtils.bytes(infos['size'])})')
 				path = dst_path / src_dir.with_suffix('.zip')
 				try:
@@ -277,4 +276,4 @@ k2HxaOQ5plpP59/jFEls6NoD8GyQtpY06BR+wCOR2e+/ljmcTYpUXP5mNQah+VcDVImKw3otRLsT
 IRnQ1Ek/63j1E9LuxiHIAJ7XiJYLPWCfojbkQx6N2jlfEqNJudij2EsQAGjldO8ghxR+CgYA9zHa
 RpHICgDYTXGxXYMyaMVotS18/uELXES3TCulURn8iChuWseJa1+g4H0YFEq7os9OaPBS8gEY2pVs
 OpO9dT3HqebSmYPLji8QQEyVYIoEY4qE6o5+cgD8xYF9mcXPV12fPIIrXx13KAAAAAAASUVORK5C
-YII=''').mainloop()
+YII=''').mainloop()	# give tk the icon as base64 and open main window
