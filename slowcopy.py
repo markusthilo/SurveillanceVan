@@ -2,11 +2,11 @@
 # -*- coding: utf-8 -*-
 
 __author__ = 'Markus Thilo'
-__version__ = '0.0.1_2024-07-30'
+__version__ = '0.0.1_2024-07-31'
 __license__ = 'GPL-3'
 __email__ = 'markus.thilo@gmail.com'
 __status__ = 'Testing'
-__description__ = 'Version LKA 71 - Test'
+__description__ = 'TEST - LKA 71'
 __destination__ = 'C:\\Users\\THI\\Documents\\test_dst'
 #__destination__ = '/home/neo/test/test_dst'
 __logging__ = 'C:\\Users\\THI\\Documents\\test_log'
@@ -41,13 +41,14 @@ class Copy:
 	TSV_NAME = 'done.txt'	# csv file name - file is generaten when all is done
 	MAX_PATH_LEN = 230	# throw error when paths have more chars
 	ZIP_DEPTH = 2	# path depth where subdirs will be zipped
-	ZIP_FILE_QUANTITY = 10	# minamal quantity of files in subdir to zip
+	ZIP_FILE_QUANTITY = 1000	# minamal quantity of files in subdir to zip
 
 	def __init__(self, root_dirs, echo=print):
 		'''Generate object to copy and to zip'''
 		self.exceptions = True
 		for root_dir in root_dirs:
-			root_path = Path(root_dir)
+			root_path = Path(root_dir.strip('"').strip("'").strip())	# make sure f**king win gets pure path
+			echo(f'Preparing to copy {root_path}')
 			if not root_path.is_dir():
 				echo(f'Skipping {root_path}, it is not a directory')
 				continue
@@ -91,27 +92,33 @@ class Copy:
 					path.mkdir(parents=True, exist_ok=True)
 				except Exception as ex:
 					log.warning(f'Unable to generate directory {path}:\n{ex}')
+
+			all_files = len(files2copy) + len(dirs2zip)
+			counter = 1
 			for src_file, infos in files2copy.items():
-				echo(f'Copying {src_file}) {StringUtils.bytes(infos['size'])}')
+				echo(f'Copying {src_file}) ({counter} of {all_files}, {StringUtils.bytes(infos['size'])})')
 				path = dst_path / src_file
 				try:
 					hash = PathUtils.copy_file(root_path  / src_file, path)
 				except Exception as ex:
 					log.error(f'Unable to copy source file to {path}:\n{ex}')
 				else:
+					counter += 1
 					if hash:
 						tsv += f'\n{src_file}\t{infos["size"]}\t{hash}'
 					else:
 						log.error(f'Source file and {path} are not identical')
 			for src_dir, infos in dirs2zip.items():
-				echo(f'Zipping {src_dir}) {StringUtils.bytes(infos['size'])}')
+				echo(f'Zipping {src_dir} ({counter} of {all_files}, {StringUtils.bytes(infos['size'])})')
 				path = dst_path / src_dir.with_suffix('.zip')
 				try:
 					hash, file_errors, dir_errors = PathUtils.zip_dir(root_path  / src_dir, path)
 				except Exception as ex:
 					log.error(f'Unable build archive {path}:\n{ex}')
 				else:
+					counter += 1
 					tsv += f'\n{src_dir.with_suffix(".zip")}\t{path.stat().st_size}\t{hash}'
+					log.info(f'Zipped {src_dir}', echo=False)
 					if file_errors:
 						log.warning(f'The following file(s) could not be zipped:\n{"\n".join(file_errors)}')
 					if dir_errors:
@@ -126,6 +133,7 @@ class Copy:
 				log_tsv.write_text(tsv, encoding='utf-8')
 			except Exception as ex:
 				log.error(f'Unable to write {log_tsv}:\n{ex}')
+			log.info(f'Wrote {counter-1} files to {dst_path}')
 			if log.close():
 				echo(f'{log.errors} error(s) and {log.warnings} occured while processing {root_path}')
 			else:
@@ -200,6 +208,7 @@ class Gui(Tk):
 		self.info_text.configure(state='disabled')
 
 	def _add_dir(self):
+		'''Add directory into field'''
 		directory = askdirectory(title='Select directory to copy', mustexist=True)
 		if directory:
 			self.source_text.insert('end', f'{directory}\n')
@@ -213,6 +222,7 @@ class Gui(Tk):
 		self.info_text.yview('end')
 
 	def _execute(self):
+		'''Start copy process / worker'''
 		source_paths = self.source_text.get('1.0', 'end').strip()
 		if not source_paths:
 			return
@@ -235,6 +245,7 @@ class Gui(Tk):
 		self.worker = None
 
 	def _quit_app(self):
+		'''Quit app, ask when copy processs is running'''
 		if self.worker and not askyesno(
 			title='Copy process is running!',
 			message='Are you sure to kill copy process / application?'
@@ -242,13 +253,13 @@ class Gui(Tk):
 			return
 		self.destroy()
 
-if __name__ == '__main__':  # start here
-	if len(sys_argv) > 1:
+if __name__ == '__main__':  # start here when run as application
+	if len(sys_argv) > 1:	# when arguments / dirs are given, run on command line
 		copy = Copy(sys_argv[1:])
-		if copy.exceptions:		
+		if copy.exceptions:	# exit code 0 when there are any exceptions
 			sys_exit(1)
 		sys_exit(0)
-	else:
+	else:	# open gui if no argument is given
 		Gui('''iVBORw0KGgoAAAANSUhEUgAAADAAAAAwCAMAAABg3Am1AAACEFBMVEUAAAH7AfwVFf8WFv4XF/0Y
 GPwZGfwaGvsaGvwbG/scHPodHfkeHvkfH/kgIPggIPkhIfciIvYjI/UkJPUlJfQnJ/IoKPEpKfAq
 KvArK+4rK+8sLO4tLewtLe0uLusuLuwvL+swMOoxMegxMekyMuczM+UzM+Y0NOQ0NOU1NeM1NeQ1

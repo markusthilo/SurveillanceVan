@@ -19,10 +19,11 @@ class Logger:
 		'''Return timestamp'''
 		return datetime.now().strftime('%Y-%m-%d %H:%M:%S.%f')
 
-	def info(self, *args):
+	def info(self, *args, echo=True):
 		'''Print info to log'''
 		print(self._now(), 'INFO', *args, file=self._fh)
-		self._echo(*args)
+		if echo:
+			self._echo(*args)
 
 	def warning(self, *args):
 		'''Print warning to log'''
@@ -38,6 +39,5 @@ class Logger:
 
 	def close(self):
 		'''Close logfile'''
-		self.info('Done, closing log file')
 		self._fh.close()
 		return self.warnings + self.warnings > 0
