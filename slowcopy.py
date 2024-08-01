@@ -104,7 +104,7 @@ class Copy:
 					log.error(f'Unable to copy source file to {path}:\n{ex}')
 				else:
 					counter += 1
-					total_size += infos["size"]
+					total_size += infos['size']
 					if hash:
 						tsv += f'\n{src_file}\t{infos["size"]}\t{hash}'
 					else:
