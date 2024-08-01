@@ -13,11 +13,10 @@ class ConfigReader:
 		config.read(configfile)
 		for section in config.sections():
 			for name in config[section]:
-				attribute_name = f'{name}_{section.lower().rstrip('s')}'
-				if section == 'PATHS':
-					setattr(self, attribute_name, Path(config[section][name]))
+				if section in ('PATHS', 'DIRS', 'FILES'):
+					setattr(self, f'{name}_{section.lower().rstrip('s')}', Path(config[section][name]))
 				else:
 					try:
-						setattr(self, attribute_name, int(config[section][name]))
+						setattr(self, f'{section.lower().rstrip('s')}_{name}', int(config[section][name]))
 					except ValueError:
-						setattr(self, attribute_name, config[section][name])
+						setattr(self, f'{section.lower().rstrip('s')}_{name}', config[section][name])

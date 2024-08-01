@@ -8,14 +8,14 @@ __email__ = 'markus.thilo@gmail.com'
 __status__ = 'Testing'
 __description__ = 'Watch copy processes'
 
+### Standard libs ###
+import logging
 from pathlib import Path
 from filecmp import cmp as filecmp
 from threading import Thread
-from sys import exit as sysexit
 from time import sleep
 from datetime import datetime
 from argparse import ArgumentParser
-import logging
 ### Custom libs ###
 from lib.pathutils import PathUtils
 from lib.configreader import ConfigReader
@@ -37,13 +37,29 @@ class TreeCmp:
 			elif tp == 'dir' and not major_path.is_dir():
 				self.missing.append((rel_path, 'missing dir'))
 
+class Trigger:
+	'''Surveillance of trigger directory'''
+
+	def __init__(self, root_path):
+		'''Generate object'''
+		self.root_path = root_path
+		self.existing_dirs = PathUtils.get_subdirs(self.root_path)
+
+	def get_new_dirs(self):
+		'''Returns set with new subdirectory paths'''
+		#for dir in self.existing_dirs - PathUtils.get_subdirs(self.root_path):
+		for dir in self.existing_dirs:	# debug
+			if dir.joinpath(config.trigger_filename).is_file():
+				return dir
+
 class Check:
 	'''Run check'''
 
 	def __init__(self, config):
 		'''Build object'''
-		logging.info(f'Checking what is missing in {config.work_path} and {config.backup_path}')
-
+		logging.info(f'Checking what is missing in {config.work_dir} and {config.backup_dir}')
+		trigger = Trigger(config.trigger_dir)
+		print(trigger.get_new_dirs())
 
 		'''
 		tc = TreeCmp(config.work_path, config.backup_path)
@@ -93,16 +109,15 @@ if __name__ == '__main__':	# start here if called as application
 	elif args.loglevel:
 		log_level = args.loglevel
 	else:
-		log_level = config.level_log
+		log_level = config.log_level
 	if args.logfile:
 		log_path = args.logfile
 	else:
-		log_path = Path(config.path_log)
+		log_path = config.log_file
 	Logger(log_path, log_level)
 	if log_level == 'debug':
 		logging.debug('Check on debug level')
 		Check(config)
-		print(log_path.read_text())
-		sysexit(0)
+		#print(log_path.read_text())
 	else:
 		MainLoop(config)

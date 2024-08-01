@@ -11,6 +11,11 @@ class PathUtils:
 	BLOCK_SIZE = sha256().block_size * 1024
 
 	@staticmethod
+	def get_subdirs(root):
+		'''Returns set with subdirectory paths, NOT recursivly'''
+		return { path for path in root.iterdir() if path.is_dir() }
+
+	@staticmethod
 	def walk(root):
 		'''Recursivly give all sub-paths'''
 		for path in root.rglob('*'):
