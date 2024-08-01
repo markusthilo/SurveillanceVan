@@ -2,15 +2,15 @@
 # -*- coding: utf-8 -*-
 
 __author__ = 'Markus Thilo'
-__version__ = '0.0.1_2024-07-31'
+__version__ = '0.0.1_2024-08-01'
 __license__ = 'GPL-3'
 __email__ = 'markus.thilo@gmail.com'
 __status__ = 'Testing'
 __description__ = 'TEST - LKA 71'
-__destination__ = 'C:\\Users\\THI\\Documents\\test_dst'
-#__destination__ = '/home/neo/test/test_dst'
-__logging__ = 'C:\\Users\\THI\\Documents\\test_log'
-#__logging__ = '/home/neo/test/test_log'
+#__destination__ = 'C:\\Users\\THI\\Documents\\test_dst'
+__destination__ = '/home/neo/Documents/test_dst'
+#__logging__ = 'C:\\Users\\THI\\Documents\\test_log'
+__logging__ = '/home/neo/Documents/test_log'
 
 ### standard libs ###
 from sys import executable as __executable__
@@ -94,6 +94,7 @@ class Copy:
 					log.warning(f'Unable to generate directory {path}:\n{ex}')
 			all_files = len(files2copy) + len(dirs2zip)	# how much files to copy?
 			counter = 1
+			total_size = 0
 			for src_file, infos in files2copy.items():	# loop to copy files
 				echo(f'Copying {src_file}) ({counter} of {all_files}, {StringUtils.bytes(infos['size'])})')
 				path = dst_path / src_file
@@ -103,6 +104,7 @@ class Copy:
 					log.error(f'Unable to copy source file to {path}:\n{ex}')
 				else:
 					counter += 1
+					total_size += infos["size"]
 					if hash:
 						tsv += f'\n{src_file}\t{infos["size"]}\t{hash}'
 					else:
@@ -116,7 +118,9 @@ class Copy:
 					log.error(f'Unable build archive {path}:\n{ex}')
 				else:
 					counter += 1
-					tsv += f'\n{src_dir.with_suffix(".zip")}\t{path.stat().st_size}\t{hash}'
+					size = path.stat().st_size
+					total_size += size
+					tsv += f'\n{src_dir.with_suffix(".zip")}\t{size}\t{hash}'
 					log.info(f'Zipped {src_dir}', echo=False)
 					if file_errors:
 						log.warning(f'The following file(s) could not be zipped:\n{"\n".join(file_errors)}')
@@ -132,7 +136,7 @@ class Copy:
 				log_tsv.write_text(tsv, encoding='utf-8')
 			except Exception as ex:
 				log.error(f'Unable to write {log_tsv}:\n{ex}')
-			log.info(f'Wrote {counter-1} files to {dst_path}')
+			log.info(f'Wrote {counter-1} files 7 {total_size} Bytes ({StringUtils.bytes(total_size)}) to {dst_path}')
 			if log.close():
 				echo(f'{log.errors} error(s) and {log.warnings} occured while processing {root_path}')
 			else:
