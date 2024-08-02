@@ -2,15 +2,15 @@
 # -*- coding: utf-8 -*-
 
 __author__ = 'Markus Thilo'
-__version__ = '0.0.1_2024-08-01'
+__version__ = '0.0.1_2024-08-02'
 __license__ = 'GPL-3'
 __email__ = 'markus.thilo@gmail.com'
 __status__ = 'Testing'
 __description__ = 'TEST - LKA 71'
-#__destination__ = 'C:\\Users\\THI\\Documents\\test_dst'
-__destination__ = '/home/neo/Documents/test_dst'
-#__logging__ = 'C:\\Users\\THI\\Documents\\test_log'
-__logging__ = '/home/neo/Documents/test_log'
+__destination__ = 'C:\\Users\\THI\\Documents\\test_dst'
+#__destination__ = '/home/neo/Documents/test_dst'
+__logging__ = 'C:\\Users\\THI\\Documents\\test_log'
+#__logging__ = '/home/neo/Documents/test_log'
 
 ### standard libs ###
 from sys import executable as __executable__
@@ -136,7 +136,7 @@ class Copy:
 				log_tsv.write_text(tsv, encoding='utf-8')
 			except Exception as ex:
 				log.error(f'Unable to write {log_tsv}:\n{ex}')
-			log.info(f'Wrote {counter-1} files 7 {total_size} Bytes ({StringUtils.bytes(total_size)}) to {dst_path}')
+			log.info(f'Wrote {counter-1} files / {total_size} Bytes ({StringUtils.bytes(total_size)}) to {dst_path}')
 			if log.close():
 				echo(f'{log.errors} error(s) and {log.warnings} occured while processing {root_path}')
 			else:

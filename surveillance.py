@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 __author__ = 'Markus Thilo'
-__version__ = '0.1_2024-08-01'
+__version__ = '0.1_2024-08-02'
 __license__ = 'GPL-3'
 __email__ = 'markus.thilo@gmail.com'
 __status__ = 'Testing'
@@ -50,7 +50,8 @@ class Trigger:
 		#for dir in self.existing_dirs - PathUtils.get_subdirs(self.root_path):
 		for dir in self.existing_dirs:	# debug
 			if dir.joinpath(config.trigger_filename).is_file():
-				return dir
+				
+				yield dir
 
 class Check:
 	'''Run check'''
@@ -59,7 +60,8 @@ class Check:
 		'''Build object'''
 		logging.info(f'Checking what is missing in {config.work_dir} and {config.backup_dir}')
 		trigger = Trigger(config.trigger_dir)
-		print(trigger.get_new_dirs())
+		for dir in trigger.get_new_dirs():
+			print(dir)
 
 		'''
 		tc = TreeCmp(config.work_path, config.backup_path)
