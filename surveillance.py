@@ -48,10 +48,16 @@ class Trigger:
 	def get_new_dirs(self):
 		'''Returns set with new subdirectory paths'''
 		#for dir in self.existing_dirs - PathUtils.get_subdirs(self.root_path):
-		for dir in self.existing_dirs:	# debug
-			if dir.joinpath(config.trigger_filename).is_file():
-				
-				yield dir
+		for dir_path in self.existing_dirs:	# debug
+			tsv_path = dir_path.joinpath(config.trigger_filename)
+			if tsv_path.is_file():
+				hashes = dict()
+				for line in tsv_path.read_text().split('\n')[1:]:
+					entries = line.split('\t')
+					hashes[Path(entries[0])] = entries[2]
+				yield dir_path, hashes
+
+
 
 class Check:
 	'''Run check'''
@@ -60,8 +66,9 @@ class Check:
 		'''Build object'''
 		logging.info(f'Checking what is missing in {config.work_dir} and {config.backup_dir}')
 		trigger = Trigger(config.trigger_dir)
-		for dir in trigger.get_new_dirs():
-			print(dir)
+		for dir_path, hashes in trigger.get_new_dirs():
+			print(dir_path)
+			print(hashes)
 
 		'''
 		tc = TreeCmp(config.work_path, config.backup_path)

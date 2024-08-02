@@ -7,10 +7,10 @@ __license__ = 'GPL-3'
 __email__ = 'markus.thilo@gmail.com'
 __status__ = 'Testing'
 __description__ = 'TEST - LKA 71'
-__destination__ = 'C:\\Users\\THI\\Documents\\test_dst'
-#__destination__ = '/home/neo/Documents/test_dst'
-__logging__ = 'C:\\Users\\THI\\Documents\\test_log'
-#__logging__ = '/home/neo/Documents/test_log'
+#__destination__ = 'C:\\Users\\THI\\Documents\\test_dst'
+__destination__ = '/home/neo/Documents/test_dst'
+#__logging__ = 'C:\\Users\\THI\\Documents\\test_log'
+__logging__ = '/home/neo/Documents/test_log'
 
 ### standard libs ###
 from sys import executable as __executable__
