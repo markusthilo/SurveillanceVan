@@ -29,7 +29,7 @@ class PathUtils:
 
 	@staticmethod
 	def tree(root):
-		'''Get size'''
+		'''Get size, subdirs and subfiles (recursivly)'''
 		dirs = {Path('.'): {'depth': 0, 'size': 0, 'files': 0}}
 		files = dict()
 		for path in root.rglob('*'):

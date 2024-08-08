@@ -57,7 +57,18 @@ class Trigger:
 					hashes[Path(entries[0])] = entries[2]
 				yield dir_path, hashes
 
+class Directory:
+	'''Directory'''
 
+	def __init__(self, path):
+		'''Set directory'''
+		self._path = path
+
+	def check(self, hashes):
+		'''Check hashes'''
+		for path in self._path.rglob('*'):
+			if path.is_file():
+				print(path)
 
 class Check:
 	'''Run check'''
@@ -66,9 +77,9 @@ class Check:
 		'''Build object'''
 		logging.info(f'Checking what is missing in {config.work_dir} and {config.backup_dir}')
 		trigger = Trigger(config.trigger_dir)
-		for dir_path, hashes in trigger.get_new_dirs():
-			print(dir_path)
-			print(hashes)
+		for log_path, hashes in trigger.get_new_dirs():
+			print(log_path)
+			work_dir = Directory(dir_path)
 
 		'''
 		tc = TreeCmp(config.work_path, config.backup_path)
