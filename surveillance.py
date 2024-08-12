@@ -11,8 +11,8 @@ __description__ = 'Watch copy processes'
 ### Standard libs ###
 import logging
 from pathlib import Path
-from filecmp import cmp as filecmp
-from threading import Thread
+from zipfile import ZipFile
+#from threading import Thread
 from time import sleep
 from datetime import datetime
 from argparse import ArgumentParser
@@ -21,22 +21,7 @@ from lib.pathutils import PathUtils
 from lib.configreader import ConfigReader
 from lib.advancedlogger import Logger
 
-class TreeCmp:
-	'''Compare recursivly and check what is in minor but missing in major'''
-
-	def __init__(self, major_root, minor_root):
-		'''Generate attributes "missing" = dict'''
-		self.missing = list()
-		for minor_path, rel_path, tp in PathUtils.walk(minor_root):
-			major_path = major_root / rel_path
-			if tp == 'file':
-				if not major_path.is_file():
-					self.missing.append((rel_path, 'missing file'))
-				elif not filecmp(major_path, minor_path):
-					self.missing.append((rel_path, 'divergent file'))
-			elif tp == 'dir' and not major_path.is_dir():
-				self.missing.append((rel_path, 'missing dir'))
-
+"""
 class Trigger:
 	'''Surveillance of trigger directory'''
 
@@ -55,20 +40,90 @@ class Trigger:
 				for line in tsv_path.read_text().split('\n')[1:]:
 					entries = line.split('\t')
 					hashes[Path(entries[0])] = entries[2]
-				yield dir_path, hashes
+				yield dir_path.relative_to(self.root_path), hashes
+"""
+
+class Trigger:
+	'''Surveillance of trigger directory'''
+
+	def __init__(self, config):
+		'''Get trigger directories from config file'''
+		self._root_dirs = [	# build list of trigger subpaths
+			config.trigger_dir/(subdir.strip())
+			for subdir in config.trigger_subdirs.split(',')
+		]
+		
+	def read(self):
+		'''Read trigger directory, return relative path, file size and hash from tsv file'''
+		for dep_path in self._root_dirs:	# loop departments
+			if not dep_path.is_dir():	# skip if dir does not exist
+				continue
+			for dir_path in PathUtils.get_subdirs(dep_path):	# loop case dirs
+				tsv_path = dir_path.joinpath(config.trigger_filename)
+				if tsv_path.is_file():	# check if tsv file with sizes and hashes exists
+					sizes = dict()	# dict with file sizes to generate from tsv file
+					hashes = dict()	# dict with file hashes to generate from tsv file
+					for line in tsv_path.read_text().split('\n')[1:]:	# read tsv file
+						entries = line.split('\t')
+						sizes[Path(entries[0])] = int(entries[1])
+						hashes[Path(entries[0])] = entries[2]
+					yield dir_path.relative_to(dep_path), sizes, hashes
 
 class Directory:
-	'''Directory'''
+	'''Directory to surveil'''
 
 	def __init__(self, path):
-		'''Set directory'''
-		self._path = path
+		'''Set directory path'''
+		self.path = path
 
-	def check(self, hashes):
-		'''Check hashes'''
-		for path in self._path.rglob('*'):
-			if path.is_file():
-				print(path)
+	def check(self, sizes, hashes):
+		'''Check if files exists, file sizes and hashes are matching'''
+		self.files = {	# all (recursivly) file paths in the directory
+			path for path in self.path.rglob('*')
+			if path.is_file()
+		}
+		warning_cnt = 0
+		for rel_path in sizes:	# loop given files (sizes+hashes) and check for mismatches in directory
+			abs_path = self.path/rel_path
+			if not abs_path in self.files:
+				logging.warning(f'Did not find {rel_path} in {self.path}')
+				warning_cnt += 1
+			elif abs_path.stat().st_size != sizes[rel_path]:
+				logging.warning(f'Mismatching file size of {abs_path}')
+				warning_cnt += 1
+			elif PathUtils.hash_file(abs_path) != hashes[rel_path]:
+				logging.warning(f'Mismatching hash value of {abs_path}')
+				warning_cnt += 1
+		return warning_cnt	# return number of warnings / mismatching files
+
+class Archive:
+	'''Zip archive to surveil'''
+
+	def __init__(self, path):
+		'''Open archive to read'''
+		self.path = path
+		self._zipfile = ZipFile(self.path)
+
+	def check(self, sizes, hashes):
+		'''Check if files exists, file sizes and hashes are matching'''
+		dir_path = Path(self.path.stem)
+		self.members = {	# all (recursivly) members with file sizes of the zip archive
+			Path(member.filename): member.file_size for member in self._zipfile.infolist()
+		}
+		warning_cnt = 0
+		for rel_path in sizes:	# loop given files (sizes+hashes) and check for mismatches in directory
+			in_zip_path = dir_path/rel_path
+			if not in_zip_path in self.members:
+				logging.warning(f'Did not find {in_zip_path} in {self.path}')
+				warning_cnt += 1
+			elif self.members[in_zip_path] != sizes[rel_path]:
+				logging.warning(f'Mismatching file size of {in_zip_path} in {self.path}')
+				warning_cnt += 1
+			else:
+				if PathUtils.hash_zip(self._zipfile, in_zip_path) != hashes[rel_path]:
+					logging.warning(f'Mismatching hash value of {in_zip_path} in {self.path}')
+					warning_cnt += 1
+		return warning_cnt	# return number of warnings / mismatching files
 
 class Check:
 	'''Run check'''
@@ -76,21 +131,22 @@ class Check:
 	def __init__(self, config):
 		'''Build object'''
 		logging.info(f'Checking what is missing in {config.work_dir} and {config.backup_dir}')
-		trigger = Trigger(config.trigger_dir)
-		for log_path, hashes in trigger.get_new_dirs():
-			print(log_path)
-			work_dir = Directory(dir_path)
-
-		'''
-		tc = TreeCmp(config.work_path, config.backup_path)
-		if len(tc.missing) == 0:
-			logging.info('Nothing is missing')
+		trigger = Trigger(config)
+		for rel_path, sizes, hashes in trigger.read():
+			sub_dir = rel_path.name[:2]
+			work_dir = Directory(config.work_dir/sub_dir/rel_path)
+			#backup_dir = Directory(config.backup_dir/sub_dir/rel_path)
+			#warning_cnt = work_dir.check(sizes, hashes) + backup_dir.check(sizes, hashes)
+			backup_zip = Archive(config.backup_dir/sub_dir/rel_path.with_suffix('.zip'))
+			warning_cnt = work_dir.check(sizes, hashes) + backup_zip.check(sizes, hashes)
+		msg = 'Check finished. '
+		if warning_cnt == 0:
+			#msg += f'All files were copied to {work_dir.path} and {backup_dir.path}'
+			msg += f'All files were copied to {work_dir.path} and {backup_zip.path}'
 		else:
-			msg = f'{len(tc.missing)} missing path(s):'
-			for path, tp in tc.missing:
-				msg += f'\n\t{tp}:\t{path}'
-			logging.info(msg)
-		'''
+			msg += f'{warning_cnt} problem(s) occured.'
+			print(msg)
+		logging.info(msg)
 
 class MainLoop:
 	'Main loop'
@@ -138,6 +194,6 @@ if __name__ == '__main__':	# start here if called as application
 	if log_level == 'debug':
 		logging.debug('Check on debug level')
 		Check(config)
-		#print(log_path.read_text())
+		print(log_path.read_text())
 	else:
 		MainLoop(config)
