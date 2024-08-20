@@ -14,7 +14,7 @@ class StringUtils:
 	@staticmethod
 	def join(iterable, delimiter=' '):
 		'''Join iterable to list but be tolerant to missing items'''
-		return delimiter.join([f'{item.strip()}' for item in iterable if item])
+		return delimiter.join([f'{str(item).strip()}' for item in iterable if item])
 
 	@staticmethod
 	def bytes(size, format_k='{iec} / {si}', format_b='{b} byte(s)'):

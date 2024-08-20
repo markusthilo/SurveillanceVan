@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 __author__ = 'Markus Thilo'
-__version__ = '0.1_2024-08-02'
+__version__ = '0.0.1_2024-08-20'
 __license__ = 'GPL-3'
 __email__ = 'markus.thilo@gmail.com'
 __status__ = 'Testing'
@@ -18,6 +18,7 @@ from datetime import datetime
 from argparse import ArgumentParser
 ### Custom libs ###
 from lib.pathutils import PathUtils
+from lib.stringutils import StringUtils
 from lib.configreader import ConfigReader
 from lib.advancedlogger import Logger
 
@@ -52,12 +53,15 @@ class Trigger:
 			config.trigger_dir/(subdir.strip())
 			for subdir in config.trigger_subdirs.split(',')
 		]
+		logging.debug(f'Surveilling {StringUtils.join(self._root_dirs, delimiter=", ")}')
 		
 	def read(self):
 		'''Read trigger directory, return relative path, file size and hash from tsv file'''
 		for dep_path in self._root_dirs:	# loop departments
 			if not dep_path.is_dir():	# skip if dir does not exist
+				logging.warning(f'Did not find {dep_path}')
 				continue
+			logging.debug(f'Reading structure of {dep_path}')
 			for dir_path in PathUtils.get_subdirs(dep_path):	# loop case dirs
 				tsv_path = dir_path.joinpath(config.trigger_filename)
 				if tsv_path.is_file():	# check if tsv file with sizes and hashes exists
@@ -78,6 +82,7 @@ class Directory:
 
 	def check(self, sizes, hashes):
 		'''Check if files exists, file sizes and hashes are matching'''
+		logging.debug(f'Checking {self.path} for new entries/directories')
 		self.files = {	# all (recursivly) file paths in the directory
 			path for path in self.path.rglob('*')
 			if path.is_file()
@@ -130,19 +135,25 @@ class Check:
 
 	def __init__(self, config):
 		'''Build object'''
-		logging.info(f'Checking what is missing in {config.work_dir} and {config.backup_dir}')
-		trigger = Trigger(config)
-		for rel_path, sizes, hashes in trigger.read():
+		self.trigger = Trigger(config)
+
+	def check(self):
+		'''Run check'''
+		new_cnt = 0
+		warning_cnt = 0
+		for rel_path, sizes, hashes in self.trigger.read():
+			new_cnt += 1
 			sub_dir = rel_path.name[:2]
 			work_dir = Directory(config.work_dir/sub_dir/rel_path)
-			#backup_dir = Directory(config.backup_dir/sub_dir/rel_path)
-			#warning_cnt = work_dir.check(sizes, hashes) + backup_dir.check(sizes, hashes)
-			backup_zip = Archive(config.backup_dir/sub_dir/rel_path.with_suffix('.zip'))
-			warning_cnt = work_dir.check(sizes, hashes) + backup_zip.check(sizes, hashes)
+			backup_dir = Directory(config.backup_dir/sub_dir/rel_path)
+			warning_cnt += work_dir.check(sizes, hashes) + backup_dir.check(sizes, hashes)
+			#backup_zip = Archive(config.backup_dir/sub_dir/rel_path.with_suffix('.zip'))
+			#warning_cnt = work_dir.check(sizes, hashes) + backup_zip.check(sizes, hashes)
 		msg = 'Check finished. '
-		if warning_cnt == 0:
-			#msg += f'All files were copied to {work_dir.path} and {backup_dir.path}'
-			msg += f'All files were copied to {work_dir.path} and {backup_zip.path}'
+		if new_cnt == 0:
+			msg += 'Did not find new directories.'
+		elif warning_cnt == 0:
+			msg += f'All files were copied to {config.work_dir} and {config.backup_dir}'
 		else:
 			msg += f'{warning_cnt} problem(s) occured.'
 			print(msg)
@@ -151,9 +162,9 @@ class Check:
 class MainLoop:
 	'Main loop'
 
-	def __init__(self, config):
+	def __init__(self, config, log):
 		'Initiate main loop'
-		self.config = config
+		self.checker = Check(config)
 		logging.info('Starting main loop')
 		while True:	# check if time matches
 			if datetime.now().strftime('%H:%M') in config.updates:
@@ -163,7 +174,7 @@ class MainLoop:
 	def worker(self):
 		'Do the main work'
 		try:
-			Check(config)
+			self.checker.check()
 		except Exception as err:
 			logging.error(err)
 
@@ -180,20 +191,16 @@ if __name__ == '__main__':	# start here if called as application
 		help='Log level, ignorde on -d/--debug', metavar='STRING')
 	args = argparser.parse_args()
 	config = ConfigReader(args.config)
-	if args.debug:
+	if args.debug:	# log level given on cmd line beats config file
 		log_level = 'debug'
 	elif args.loglevel:
 		log_level = args.loglevel
 	else:
 		log_level = config.log_level
-	if args.logfile:
-		log_path = args.logfile
-	else:
-		log_path = config.log_file
-	Logger(log_path, log_level)
+	log = Logger(level=log_level, dir=config.log_dir, stem=config.log_stem, path=args.logfile)
 	if log_level == 'debug':
 		logging.debug('Check on debug level')
-		Check(config)
-		print(log_path.read_text())
+		Check(config).check()
+		print(log.path.read_text())
 	else:
-		MainLoop(config)
+		MainLoop(config, log)
