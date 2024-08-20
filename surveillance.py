@@ -11,8 +11,8 @@ __description__ = 'Watch copy processes'
 ### Standard libs ###
 import logging
 from pathlib import Path
-from zipfile import ZipFile
-#from threading import Thread
+from zipfile import ZipFile, ZIP_DEFLATED
+from shutil import rmtree
 from time import sleep
 from datetime import datetime
 from argparse import ArgumentParser
@@ -47,7 +47,7 @@ class Trigger:
 class Trigger:
 	'''Surveillance of trigger directory'''
 
-	def __init__(self, config):
+	def __init__(self):
 		'''Get trigger directories from config file'''
 		self._root_dirs = [	# build list of trigger subpaths
 			config.trigger_dir/(subdir.strip())
@@ -63,15 +63,15 @@ class Trigger:
 				continue
 			logging.debug(f'Reading structure of {dep_path}')
 			for dir_path in PathUtils.get_subdirs(dep_path):	# loop case dirs
-				tsv_path = dir_path.joinpath(config.trigger_filename)
-				if tsv_path.is_file():	# check if tsv file with sizes and hashes exists
+				trigger_path = dir_path.joinpath(config.trigger_filename)
+				if trigger_path.is_file():	# check if tsv file with sizes and hashes exists
 					sizes = dict()	# dict with file sizes to generate from tsv file
 					hashes = dict()	# dict with file hashes to generate from tsv file
-					for line in tsv_path.read_text().split('\n')[1:]:	# read tsv file
+					for line in trigger_path.read_text().split('\n')[1:]:	# read tsv file
 						entries = line.split('\t')
 						sizes[Path(entries[0])] = int(entries[1])
 						hashes[Path(entries[0])] = entries[2]
-					yield dir_path.relative_to(dep_path), sizes, hashes
+					yield dir_path, dir_path.relative_to(dep_path), sizes, hashes
 
 class Directory:
 	'''Directory to surveil'''
@@ -133,22 +133,31 @@ class Archive:
 class Check:
 	'''Run check'''
 
-	def __init__(self, config):
+	def __init__(self):
 		'''Build object'''
-		self.trigger = Trigger(config)
+		self.trigger = Trigger()
 
 	def check(self):
 		'''Run check'''
 		new_cnt = 0
 		warning_cnt = 0
-		for rel_path, sizes, hashes in self.trigger.read():
+		for abs_path, rel_path, sizes, hashes in self.trigger.read():
 			new_cnt += 1
 			sub_dir = rel_path.name[:2]
 			work_dir = Directory(config.work_dir/sub_dir/rel_path)
 			backup_dir = Directory(config.backup_dir/sub_dir/rel_path)
-			warning_cnt += work_dir.check(sizes, hashes) + backup_dir.check(sizes, hashes)
+			warnings = work_dir.check(sizes, hashes) + backup_dir.check(sizes, hashes)
 			#backup_zip = Archive(config.backup_dir/sub_dir/rel_path.with_suffix('.zip'))
-			#warning_cnt = work_dir.check(sizes, hashes) + backup_zip.check(sizes, hashes)
+			#warnings = work_dir.check(sizes, hashes) + backup_zip.check(sizes, hashes)
+			if warnings == 0:
+				zip_path = config.done_dir / f'{rel_path}_{datetime.now().strftime("%Y-%m-%d_%H%M%S.zip")}'
+				with ZipFile(zip_path, 'w', ZIP_DEFLATED) as zf:
+					for path in abs_path.rglob('*'):
+						if path.is_file():
+							zf.write(path, path.relative_to(abs_path))
+				#rmtree(abs_path)
+			else:
+				warning_cnt += warnings
 		msg = 'Check finished. '
 		if new_cnt == 0:
 			msg += 'Did not find new directories.'
@@ -200,7 +209,7 @@ if __name__ == '__main__':	# start here if called as application
 	log = Logger(level=log_level, dir=config.log_dir, stem=config.log_stem, path=args.logfile)
 	if log_level == 'debug':
 		logging.debug('Check on debug level')
-		Check(config).check()
+		Check().check()
 		print(log.path.read_text())
 	else:
-		MainLoop(config, log)
+		MainLoop(log)
