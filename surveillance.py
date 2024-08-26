@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 __author__ = 'Markus Thilo'
-__version__ = '0.0.1_2024-08-20'
+__version__ = '0.0.1_2024-08-26'
 __license__ = 'GPL-3'
 __email__ = 'markus.thilo@gmail.com'
 __status__ = 'Testing'
@@ -22,41 +22,19 @@ from lib.stringutils import StringUtils
 from lib.configreader import ConfigReader
 from lib.advancedlogger import Logger
 
-"""
-class Trigger:
-	'''Surveillance of trigger directory'''
-
-	def __init__(self, root_path):
-		'''Generate object'''
-		self.root_path = root_path
-		self.existing_dirs = PathUtils.get_subdirs(self.root_path)
-
-	def get_new_dirs(self):
-		'''Returns set with new subdirectory paths'''
-		#for dir in self.existing_dirs - PathUtils.get_subdirs(self.root_path):
-		for dir_path in self.existing_dirs:	# debug
-			tsv_path = dir_path.joinpath(config.trigger_filename)
-			if tsv_path.is_file():
-				hashes = dict()
-				for line in tsv_path.read_text().split('\n')[1:]:
-					entries = line.split('\t')
-					hashes[Path(entries[0])] = entries[2]
-				yield dir_path.relative_to(self.root_path), hashes
-"""
-
 class Trigger:
 	'''Surveillance of trigger directory'''
 
 	def __init__(self):
 		'''Get trigger directories from config file'''
-		self._root_dirs = [	# build list of trigger subpaths
+		self._root_dirs = [	# build list of trigger subpaths from config file
 			config.trigger_dir/(subdir.strip())
 			for subdir in config.trigger_subdirs.split(',')
 		]
 		logging.debug(f'Surveilling {StringUtils.join(self._root_dirs, delimiter=", ")}')
 		
 	def read(self):
-		'''Read trigger directory, return relative path, file size and hash from tsv file'''
+		'''Read trigger directory, return relative path, file size and hash from trigger file (TSV)'''
 		for dep_path in self._root_dirs:	# loop departments
 			if not dep_path.is_dir():	# skip if dir does not exist
 				logging.warning(f'Did not find {dep_path}')
@@ -139,23 +117,27 @@ class Check:
 
 	def check(self):
 		'''Run check'''
-		new_cnt = 0
-		warning_cnt = 0
+		new_cnt = 0	# to count new subdirs in trigger dir
+		warning_cnt = 0	# to count warnings for missing or mismatching files
 		for abs_path, rel_path, sizes, hashes in self.trigger.read():
 			new_cnt += 1
-			sub_dir = rel_path.name[:2]
+			sub_dir = f'20{rel_path.name[:2]}'
 			work_dir = Directory(config.work_dir/sub_dir/rel_path)
-			backup_dir = Directory(config.backup_dir/sub_dir/rel_path)
-			warnings = work_dir.check(sizes, hashes) + backup_dir.check(sizes, hashes)
-			#backup_zip = Archive(config.backup_dir/sub_dir/rel_path.with_suffix('.zip'))
-			#warnings = work_dir.check(sizes, hashes) + backup_zip.check(sizes, hashes)
-			if warnings == 0:
+			warnings = work_dir.check(sizes, hashes)
+			if config.backup_zipped:	# in case the backup is zipped
+				backup_zip = Archive(config.backup_dir/sub_dir/rel_path.with_suffix('.zip'))
+				warnings += backup_zip.check(sizes, hashes)
+			else:	# if not zipped, check same way as work dir
+				backup_dir = Directory(config.backup_dir/sub_dir/rel_path)
+				warnings += backup_dir.check(sizes, hashes)
+			if warnings == 0:	# if everything went okay, zip log to "done" directory
 				zip_path = config.done_dir / f'{rel_path}_{datetime.now().strftime("%Y-%m-%d_%H%M%S.zip")}'
 				with ZipFile(zip_path, 'w', ZIP_DEFLATED) as zf:
 					for path in abs_path.rglob('*'):
 						if path.is_file():
 							zf.write(path, path.relative_to(abs_path))
-				#rmtree(abs_path)
+				if config.trigger_remove:	### danger zone - this removes the trigger subdir!!!
+					rmtree(abs_path)
 			else:
 				warning_cnt += warnings
 		msg = 'Check finished. '
@@ -169,23 +151,29 @@ class Check:
 		logging.info(msg)
 
 class MainLoop:
-	'Main loop'
+	'''Main loop'''
 
-	def __init__(self, config, log):
-		'Initiate main loop'
-		self.checker = Check(config)
+	def __init__(self):
+		'''Define main loop'''
+		self.checker = Check()	# generate object to run check
+		self.times = [	# get times to run check from config file
+			(lambda hm: (int(hm[0]), int(hm[1])))(t.strip().split(':', 1))
+			for t in config.trigger_time.split(',')
+		]
+
+	def run(self):
+		'''Run main loop endlessly'''
 		logging.info('Starting main loop')
 		while True:	# check if time matches
-			if datetime.now().strftime('%H:%M') in config.updates:
-				self.worker()
-				sleep(config.sleep)
+			now = datetime.now()
+			if (now.hour, now.minute) in self.times:
+				try:
+					self.checker.check()
+				except Exception as err:
+					logging.error(err)
+				sleep(60)
+			sleep(10)
 
-	def worker(self):
-		'Do the main work'
-		try:
-			self.checker.check()
-		except Exception as err:
-			logging.error(err)
 
 if __name__ == '__main__':	# start here if called as application
 	__path__ = Path(__file__)
@@ -212,4 +200,4 @@ if __name__ == '__main__':	# start here if called as application
 		Check().check()
 		print(log.path.read_text())
 	else:
-		MainLoop(log)
+		MainLoop().run()

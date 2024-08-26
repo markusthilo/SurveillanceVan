@@ -81,8 +81,8 @@ class PathUtils:
 				dfh.write(block)
 				sha.update(block)
 		src_sha = sha.hexdigest()
-		if PathUtils.hash_file(dst) == src_hash:
-			return src_hash
+		if PathUtils.hash_file(dst) == src_sha:
+			return src_sha
 
 	@staticmethod
 	def zip_dir(root, archive):
