@@ -79,6 +79,10 @@ class Directory:
 				warning_cnt += 1
 		return warning_cnt	# return number of warnings / mismatching files
 
+	def is_ready(self):
+		'''Check for file that tells that copy process has finished'''
+		return self.path.joinpath(config.work_ready).exists()
+
 class Archive:
 	'''Zip archive to surveil'''
 
@@ -119,10 +123,13 @@ class Check:
 		'''Run check'''
 		new_cnt = 0	# to count new subdirs in trigger dir
 		warning_cnt = 0	# to count warnings for missing or mismatching files
-		for abs_path, rel_path, sizes, hashes in self.trigger.read():
-			new_cnt += 1
+		for abs_path, rel_path, sizes, hashes in self.trigger.read():	# loop tsv files
 			sub_dir = f'20{rel_path.name[:2]}'
 			work_dir = Directory(config.work_dir/sub_dir/rel_path)
+			if not work_dir.is_ready():
+				logging.debug(f'Skipping {work_dir.path} - not markes as ready')
+				continue
+			new_cnt += 1
 			warnings = work_dir.check(sizes, hashes)
 			if config.backup_zipped:	# in case the backup is zipped
 				backup_zip = Archive(config.backup_dir/sub_dir/rel_path.with_suffix('.zip'))
