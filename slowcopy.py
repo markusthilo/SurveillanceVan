@@ -2,15 +2,15 @@
 # -*- coding: utf-8 -*-
 
 __author__ = 'Markus Thilo'
-__version__ = '0.0.1_2024-08-26'
+__version__ = '0.0.1_2024-08-27'
 __license__ = 'GPL-3'
 __email__ = 'markus.thilo@gmail.com'
 __status__ = 'Testing'
 __description__ = 'TEST - LKA 71'
-__destination__ = 'C:\\Users\\THI\\Documents\\test_dst'
+__destination__ = 'C:\\Users\\THI\\Documents\\test_dst\\dep1'
 #__destination__ = '/home/neo/Documents/test_dst'
-__logging__ = 'C:\\Users\\THI\\Documents\\test_log'
-#__logging__ = '/home/neo/Documents/test_log'
+__logging__ = 'C:\\Users\\THI\\Documents\\test_trigger\\dep1'
+#__logging__ = '/home/neo/Documents/test_log\dep1'
 
 ### standard libs ###
 from sys import executable as __executable__
@@ -154,9 +154,7 @@ class Worker(Thread):
 	def run(self):
 		'''Run thread'''
 		copy = Copy(self.gui.source_paths, echo=self.gui.echo)
-		if copy.exceptions:
-			showerror(title='Warning', message='Problems occured!')
-		self.gui.finished()
+		self.gui.finished(copy.exceptions)
 
 class Gui(Tk):
 	'''GUI look and feel'''
@@ -165,6 +163,10 @@ class Gui(Tk):
 	X_FACTOR = 40
 	Y_FACTOR = 30
 	LABEL = __description__
+	GREEN_FG = 'black'
+	GREEN_BG = 'pale green'
+	RED_FG = 'black'
+	RED_BG = 'coral'
 
 	def __init__(self, icon_base64):
 		'''Open application window'''
@@ -204,12 +206,28 @@ class Gui(Tk):
 		self.exec_button = Button(frame, text='Execute', command=self._execute)
 		self.exec_button.pack(padx=self.padding, pady=self.padding, side='right')
 		Hovertip(self.exec_button, 'Start copy process')
+		frame = Frame(self)
+		frame.grid(row=3, column=0,	sticky='n')
+		self.clear_button = Button(frame, text='Clear', command=self._clear_info)
+		self.clear_button.pack(padx=self.padding, pady=self.padding, fill='x', expand=True)
+		Hovertip(self.clear_button, 'Clear info field')
 		self.info_text = ScrolledText(self, font=(self.font_family, self.font_size),
 			padx = self.padding, pady = self.padding)
-		self.info_text.grid(row=3, column=0, columnspan=2, sticky='news',
+		self.info_text.grid(row=3, column=1, columnspan=1, sticky='news',
 			ipadx=self.padding, ipady=self.padding, padx=self.padding, pady=self.padding)
 		self.info_text.bind('<Key>', lambda dummy: 'break')
 		self.info_text.configure(state='disabled')
+		self.info_fg = self.info_text.cget('foreground')
+		self.info_bg = self.info_text.cget('background')
+		frame = Frame(self)
+		frame.grid(row=4, column=1, sticky='news', padx=self.padding, pady=self.padding)
+		self.info_label = Label(frame)
+		self.info_label.pack(padx=self.padding, pady=self.padding, side='left')
+		self.label_fg = self.info_label.cget('foreground')
+		self.label_bg = self.info_label.cget('background')
+		self.quit_button = Button(frame, text='Quit', command=self._quit_app)
+		self.quit_button.pack(padx=self.padding, pady=self.padding, side='right')
+		self._init_warning()
 
 	def _add_dir(self):
 		'''Add directory into field'''
@@ -225,6 +243,14 @@ class Gui(Tk):
 		self.info_text.configure(state='disabled')
 		self.info_text.yview('end')
 
+	def _clear_info(self):
+		'''Clear info text'''
+		self.info_text.configure(state='normal')
+		self.info_text.delete('1.0', 'end')
+		self.info_text.configure(state='disabled')
+		self.info_text.configure(foreground=self.info_fg, background=self.info_bg)
+		self._warning_state = 'stop'
+
 	def _execute(self):
 		'''Start copy process / worker'''
 		source_paths = self.source_text.get('1.0', 'end').strip()
@@ -233,20 +259,47 @@ class Gui(Tk):
 		self.source_button.configure(state='disabled')
 		self.source_text.configure(state='disabled')
 		self.exec_button.configure(state='disabled')
-		self.info_text.configure(state='normal')
-		self.info_text.delete('1.0', 'end')
-		self.info_text.configure(state='disabled')
+		self._clear_info()
+		self.quit_button.configure(state='disabled')
 		self.source_paths = source_paths.split('\n')
 		self.worker = Worker(self)
 		self.worker.start()
 
-	def finished(self):
+	def _init_warning(self):
+		'''Init warning functionality'''
+		self._warning_state = 'disabled'
+		self._warning()
+
+	def _warning(self, state=None):
+		'''Show flashing warning'''
+		if self._warning_state == 'enable':
+			self.info_label.configure(text='WARNING')
+			self._warning_state = '1'
+		if self._warning_state == '1':
+			self.info_label.configure(foreground=self.RED_FG, background=self.RED_BG)
+			self._warning_state = '2'
+		elif self._warning_state == '2':
+			self.info_label.configure(foreground=self.label_fg, background=self.label_bg)
+			self._warning_state = '1'
+		elif self._warning_state != 'disabled':
+			self.info_label.configure(text= '', foreground=self.label_fg, background=self.label_bg)
+			self._warning_state = 'disabled'
+		self.after(500, self._warning)
+
+	def finished(self, exceptions):
 		'''Run this when Worker has finished'''
 		self.source_text.configure(state='normal')
 		self.source_text.delete('1.0', 'end')
 		self.source_button.configure(state='normal')
 		self.exec_button.configure(state='normal')
+		self.quit_button.configure(state='normal')
 		self.worker = None
+		if exceptions:
+			self.info_text.configure(foreground=self.RED_FG, background=self.RED_BG)
+			self._warning_state = 'enable'
+			showerror(title='Warning', message='Problems occured!')
+		else:
+			self.info_text.configure(foreground=self.GREEN_FG, background=self.GREEN_BG)
 
 	def _quit_app(self):
 		'''Quit app, ask when copy processs is running'''

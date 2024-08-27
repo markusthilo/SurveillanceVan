@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 __author__ = 'Markus Thilo'
-__version__ = '0.0.1_2024-08-26'
+__version__ = '0.0.1_2024-08-27'
 __license__ = 'GPL-3'
 __email__ = 'markus.thilo@gmail.com'
 __status__ = 'Testing'
@@ -122,14 +122,16 @@ class Check:
 	def check(self):
 		'''Run check'''
 		new_cnt = 0	# to count new subdirs in trigger dir
+		ready_cnt = 0	# to count completed directories
 		warning_cnt = 0	# to count warnings for missing or mismatching files
 		for abs_path, rel_path, sizes, hashes in self.trigger.read():	# loop tsv files
+			new_cnt += 1
 			sub_dir = f'20{rel_path.name[:2]}'
 			work_dir = Directory(config.work_dir/sub_dir/rel_path)
 			if not work_dir.is_ready():
 				logging.debug(f'Skipping {work_dir.path} - not markes as ready')
 				continue
-			new_cnt += 1
+			ready_cnt += 1
 			warnings = work_dir.check(sizes, hashes)
 			if config.backup_zipped:	# in case the backup is zipped
 				backup_zip = Archive(config.backup_dir/sub_dir/rel_path.with_suffix('.zip'))
@@ -151,7 +153,7 @@ class Check:
 		if new_cnt == 0:
 			msg += 'Did not find new directories.'
 		elif warning_cnt == 0:
-			msg += f'All files were copied to {config.work_dir} and {config.backup_dir}'
+			msg += f'{ready_cnt} of {new_cnt} new dir(s) copied to {config.work_dir} and {config.backup_dir}'
 		else:
 			msg += f'{warning_cnt} problem(s) occured.'
 			print(msg)
