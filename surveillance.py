@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 __author__ = 'Markus Thilo'
-__version__ = '0.0.1_2024-08-27'
+__version__ = '0.0.1_2024-08-28'
 __license__ = 'GPL-3'
 __email__ = 'markus.thilo@gmail.com'
 __status__ = 'Testing'
@@ -45,7 +45,7 @@ class Trigger:
 				if trigger_path.is_file():	# check if tsv file with sizes and hashes exists
 					sizes = dict()	# dict with file sizes to generate from tsv file
 					hashes = dict()	# dict with file hashes to generate from tsv file
-					for line in trigger_path.read_text().split('\n')[1:]:	# read tsv file
+					for line in trigger_path.read_text(encoding='utf-8').split('\n')[1:]:	# read tsv file
 						entries = line.split('\t')
 						sizes[Path(entries[0])] = int(entries[1])
 						hashes[Path(entries[0])] = entries[2]
@@ -57,6 +57,10 @@ class Directory:
 	def __init__(self, path):
 		'''Set directory path'''
 		self.path = path
+
+	def is_ready(self):
+		'''Check for file that tells that copy process has finished'''
+		return self.path.joinpath(config.work_ready).exists()
 
 	def check(self, sizes, hashes):
 		'''Check if files exists, file sizes and hashes are matching'''
@@ -78,10 +82,6 @@ class Directory:
 				logging.warning(f'Mismatching hash value of {abs_path}')
 				warning_cnt += 1
 		return warning_cnt	# return number of warnings / mismatching files
-
-	def is_ready(self):
-		'''Check for file that tells that copy process has finished'''
-		return self.path.joinpath(config.work_ready).exists()
 
 class Archive:
 	'''Zip archive to surveil'''
