@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 
 __author__ = 'Markus Thilo'
-__version__ = '0.0.1_2024-08-27'
+__version__ = '0.0.1_2024-09-02'
 __license__ = 'GPL-3'
 __email__ = 'markus.thilo@gmail.com'
 __status__ = 'Testing'
@@ -35,13 +35,14 @@ class Copy:
 	'''Copy functionality'''
 
 	### hard coded configuration ###
-	DST_PATH = Path(__destination__)	# root directory to copy
-	LOG_PATH = Path(__logging__)	# directory to write logs that trigger surveillance
 	LOG_NAME = 'log.txt' # log file name
 	TSV_NAME = 'done.txt'	# csv file name - file is generaten when all is done
 	MAX_PATH_LEN = 230	# throw error when paths have more chars
 	ZIP_DEPTH = 2	# path depth where subdirs will be zipped
 	ZIP_FILE_QUANTITY = 1000	# minamal quantity of files in subdir to zip
+	### paths ###
+	DST_PATH = Path(__destination__)	# root directory to copy
+	LOG_PATH = Path(__logging__)	# directory to write logs that trigger surveillance
 
 	def __init__(self, root_dirs, echo=print):
 		'''Generate object to copy and to zip'''
@@ -270,7 +271,7 @@ class Gui(Tk):
 		self._warning_state = 'disabled'
 		self._warning()
 
-	def _warning(self, state=None):
+	def _warning(self):
 		'''Show flashing warning'''
 		if self._warning_state == 'enable':
 			self.info_label.configure(text='WARNING')
